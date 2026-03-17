@@ -7,11 +7,12 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import { Trash2 } from 'lucide-react-native';
 import { addDays, startOfMonth, endOfMonth, getDate, format, isSameDay } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 
-const CELL = 32;
+const CELL = 38;
 const LABEL_W = 160;
 
 // Subscribes only to this cell's checked state so only this cell re-renders on toggle
@@ -97,7 +98,9 @@ export function HabitGrid() {
                 isSameDay(d, today) && styles.todayCell,
               ]}
             >
-              <Text style={styles.dayAbbr}>{format(d, 'EEE')}</Text>
+              <Text style={styles.dayAbbr} numberOfLines={1}>
+                {format(d, 'EEE')}
+              </Text>
               <Text style={styles.dayNum}>{getDate(d)}</Text>
             </View>
           ))}
@@ -122,7 +125,7 @@ export function HabitGrid() {
                 }
                 style={styles.deleteBtn}
               >
-                <Text style={styles.deleteBtnText}>Delete</Text>
+                <Trash2 size={20} color={theme.accent} />
               </Pressable>
             </View>
             {dates.map((d) => (
@@ -213,6 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: theme.text,
+    marginTop: 2,
   },
   check: {
     width: 24,
