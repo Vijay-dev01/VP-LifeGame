@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,50 @@ import { theme } from '@/constants/theme';
 const CELL = 32;
 const LABEL_W = 160;
 
+// Subscribes only to this cell's checked state so only this cell re-renders on toggle
+const HabitCell = memo(function HabitCell({
+  habitId,
+  dateStr,
+  date,
+  isToday,
+}: {
+  habitId: string;
+  dateStr: string;
+  date: Date;
+  isToday: boolean;
+}) {
+  const checked = useStore(
+    (s) => (s.completions[dateStr] ?? []).includes(habitId)
+  );
+  const toggleHabitDay = useStore((s) => s.toggleHabitDay);
+  return (
+    <Pressable
+      style={[
+        styles.cell,
+        styles.dayCell,
+        isToday && styles.todayCell,
+      ]}
+      onPress={() => toggleHabitDay(habitId, dateStr)}
+    >
+      <View
+        style={[
+          styles.check,
+          checked && {
+            backgroundColor: theme.accent,
+            borderColor: theme.accent,
+          },
+        ]}
+      >
+        {checked ? <Text style={styles.checkMark}>✓</Text> : null}
+      </View>
+    </Pressable>
+  );
+});
+
 export function HabitGrid() {
   const currentMonth = useStore((s) => s.currentMonth);
   const habits = useStore((s) => s.habits);
-  const toggleHabitDay = useStore((s) => s.toggleHabitDay);
   const deleteHabit = useStore((s) => s.deleteHabit);
-  const isHabitDone = useStore((s) => s.isHabitDone);
   const today = useMemo(() => new Date(), []);
 
   const start = startOfMonth(new Date(currentMonth + 'T12:00:00'));
@@ -87,33 +125,15 @@ export function HabitGrid() {
                 <Text style={styles.deleteBtnText}>Delete</Text>
               </Pressable>
             </View>
-            {dates.map((d) => {
-              const dateStr = format(d, 'yyyy-MM-dd');
-              const checked = isHabitDone(habit.id, dateStr);
-              return (
-                <Pressable
-                  key={d.toISOString()}
-                  style={[
-                    styles.cell,
-                    styles.dayCell,
-                    isSameDay(d, today) && styles.todayCell,
-                  ]}
-                  onPress={() => toggleHabitDay(habit.id, dateStr)}
-                >
-                  <View
-                    style={[
-                      styles.check,
-                      checked && {
-                        backgroundColor: theme.accent,
-                        borderColor: theme.accent,
-                      },
-                    ]}
-                  >
-                    {checked ? <Text style={styles.checkMark}>✓</Text> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
+            {dates.map((d) => (
+              <HabitCell
+                key={d.toISOString()}
+                habitId={habit.id}
+                dateStr={format(d, 'yyyy-MM-dd')}
+                date={d}
+                isToday={isSameDay(d, today)}
+              />
+            ))}
           </View>
         ))}
       </View>

@@ -2,7 +2,38 @@ import { Platform } from 'react-native';
 
 let memoryFallback: Record<string, string> = {};
 
+const DEBOUNCE_MS = 400;
+const pending: Record<string, { value: string; timer: ReturnType<typeof setTimeout> }> = {};
+
+function debouncedSetItem(
+  realSetItem: (name: string, value: string) => Promise<void>,
+  name: string,
+  value: string
+): Promise<void> {
+  if (pending[name]) clearTimeout(pending[name].timer);
+  return new Promise((resolve) => {
+    pending[name] = {
+      value,
+      timer: setTimeout(() => {
+        const { value: v } = pending[name];
+        delete pending[name];
+        realSetItem(name, v).then(resolve);
+      }, DEBOUNCE_MS),
+    };
+  });
+}
+
 function getWebStorage() {
+  const realSetItem = (name: string, value: string) => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(name, value);
+        return Promise.resolve();
+      }
+    } catch (_) {}
+    memoryFallback[name] = value;
+    return Promise.resolve();
+  };
   return {
     getItem: async (name: string) => {
       try {
@@ -12,16 +43,8 @@ function getWebStorage() {
       } catch (_) {}
       return memoryFallback[name] ?? null;
     },
-    setItem: (name: string, value: string) => {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(name, value);
-          return Promise.resolve();
-        }
-      } catch (_) {}
-      memoryFallback[name] = value;
-      return Promise.resolve();
-    },
+    setItem: (name: string, value: string) =>
+      debouncedSetItem(realSetItem, name, value),
     removeItem: (name: string) => {
       try {
         if (typeof localStorage !== 'undefined') {
@@ -44,6 +67,19 @@ export function createSafeStorage() {
     AsyncStorage = require('@react-native-async-storage/async-storage').default;
   } catch (_) {}
 
+  const realSetItem = (name: string, value: string) => {
+    try {
+      if (AsyncStorage) {
+        return AsyncStorage.setItem(name, value).catch(() => {
+          memoryFallback[name] = value;
+        }) as Promise<void>;
+      }
+      memoryFallback[name] = value;
+    } catch (_) {
+      memoryFallback[name] = value;
+    }
+    return Promise.resolve();
+  };
   return {
     getItem: async (name: string) => {
       try {
@@ -51,19 +87,8 @@ export function createSafeStorage() {
       } catch (_) {}
       return memoryFallback[name] ?? null;
     },
-    setItem: (name: string, value: string) => {
-      try {
-        if (AsyncStorage) {
-          return AsyncStorage.setItem(name, value).catch(() => {
-            memoryFallback[name] = value;
-          }) as Promise<void>;
-        }
-        memoryFallback[name] = value;
-      } catch (_) {
-        memoryFallback[name] = value;
-      }
-      return Promise.resolve();
-    },
+    setItem: (name: string, value: string) =>
+      debouncedSetItem(realSetItem, name, value),
     removeItem: (name: string) => {
       try {
         if (AsyncStorage) {
