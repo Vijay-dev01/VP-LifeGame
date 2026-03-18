@@ -4,11 +4,11 @@
     "slug": "vprime",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./VP.jpg",
+    "icon": "./VP.png",
     "scheme": "vprime",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./VP.jpg",
+      "image": "./VP.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -20,7 +20,7 @@
       "package": "com.vprime.app",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./VP.jpg"
+        "foregroundImage": "./VP.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -35,11 +35,12 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 34
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -47,8 +48,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8430a49d-d1d1-4382-bb94-50286a597d2e"
+        "projectId": "ed1e302e-ca42-4b22-ac03-6c6c6889ab28"
       }
-    }
+    },
+    "owner": "vijayganesh"
   }
 }
