@@ -12,7 +12,28 @@ import {
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 
-const EMOJIS = ['😴', '🥗', '🏃', '📖', '🏋️', '🧘', '🚿', '✅', '📝', '⏰'];
+const EMOJIS = [
+  '😴',
+  '🥗',
+  '🏃',
+  '📖',
+  '🏋️',
+  '🧘',
+  '🚿',
+  '✅',
+  '📝',
+  '⏰',
+  '💧',
+  '🧠',
+  '🎯',
+  '🎧',
+  '🛌',
+  '📚',
+  '🛡️',
+  '🌿',
+  '🔥',
+  '🎨',
+];
 
 export function AddHabitModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [name, setName] = useState('');
@@ -57,6 +78,19 @@ export function AddHabitModal({ visible, onClose }: { visible: boolean; onClose:
                 </Pressable>
               ))}
             </View>
+
+            <Text style={styles.emojiLabel}>Or type / paste emoji</Text>
+            <TextInput
+              style={styles.emojiInput}
+              placeholder="😀"
+              placeholderTextColor={theme.textMuted}
+              value={emoji}
+              onChangeText={(t) => setEmoji(t.trim())}
+              autoCorrect={false}
+              autoCapitalize="none"
+              keyboardType="default"
+            />
+
             <View style={styles.actions}>
               <Pressable onPress={onClose} style={styles.cancelBtn}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -127,6 +161,15 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 22,
+  },
+  emojiInput: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    padding: 12,
+    color: theme.text,
+    fontSize: 18,
+    marginBottom: 24,
   },
   actions: {
     flexDirection: 'row',
