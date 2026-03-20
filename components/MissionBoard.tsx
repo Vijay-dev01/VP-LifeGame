@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,74 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Animated,
 } from 'react-native';
-import { format } from 'date-fns';
+import Svg, { Circle } from 'react-native-svg';
+import { addDays, format, startOfWeek } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
+import type { DayTask } from '@/store';
+
+const CARD_W = 280;
+const RING_SIZE = 116;
+const RING_STROKE = 12;
+const R = (RING_SIZE - RING_STROKE) / 2;
+const CIRC = 2 * Math.PI * R;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+function progressColor(percent: number) {
+  if (percent >= 100) return '#16a34a';
+  if (percent >= 50) return '#f59e0b';
+  return '#dc2626';
+}
+
+function ProgressRing({ percent }: { percent: number }) {
+  const animated = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(animated, {
+      toValue: percent,
+      duration: 450,
+      useNativeDriver: false,
+    }).start();
+  }, [percent, animated]);
+
+  const dashOffset = animated.interpolate({
+    inputRange: [0, 100],
+    outputRange: [CIRC, 0],
+    extrapolate: 'clamp',
+  });
+
+  const color = progressColor(percent);
+
+  return (
+    <View style={styles.ringWrap}>
+      <Svg width={RING_SIZE} height={RING_SIZE}>
+        <Circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={R}
+          stroke={theme.border}
+          strokeWidth={RING_STROKE}
+          fill="none"
+        />
+        <AnimatedCircle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={R}
+          stroke={color}
+          strokeWidth={RING_STROKE}
+          fill="none"
+          strokeDasharray={`${CIRC} ${CIRC}`}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+        />
+      </Svg>
+      <Text style={styles.ringText}>{percent}%</Text>
+    </View>
+  );
+}
 
 export function MissionBoard() {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -18,27 +82,46 @@ export function MissionBoard() {
   const addTask = useStore((s) => s.addTask);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteTask = useStore((s) => s.deleteTask);
+  const [selectedDate, setSelectedDate] = useState(today);
   const [newTitle, setNewTitle] = useState('');
-  const tasks = useMemo(() => dayTasks[today] ?? [], [dayTasks, today]);
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, []);
 
   const handleAdd = () => {
     const t = newTitle.trim();
     if (t) {
-      addTask(today, t);
+      addTask(selectedDate, t);
       setNewTitle('');
     }
   };
 
-  const sorted = [...tasks].sort((a, b) => a.order - b.order);
+  const cardData = useMemo(
+    () =>
+      weekDays.map((dateObj) => {
+        const dateKey = format(dateObj, 'yyyy-MM-dd');
+        const tasks = [...(dayTasks[dateKey] ?? [])].sort((a, b) => a.order - b.order);
+        const done = tasks.filter((t) => t.done).length;
+        const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+        return {
+          dateObj,
+          dateKey,
+          tasks,
+          percent: pct,
+        };
+      }),
+    [dayTasks, weekDays]
+  );
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>DAILY MISSION BOARD</Text>
-      <Text style={styles.date}>{format(new Date(today + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}</Text>
+    <View>
+      <Text style={styles.helperText}>Tap a day card to set where new tasks will be added.</Text>
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="Add a task..."
+          placeholder="Add task to selected day..."
           placeholderTextColor={theme.textMuted}
           value={newTitle}
           onChangeText={setNewTitle}
@@ -49,104 +132,201 @@ export function MissionBoard() {
           <Text style={styles.addBtnText}>+ Add</Text>
         </Pressable>
       </View>
-      <ScrollView style={styles.list}>
-        {sorted.map((task) => (
-          <View key={task.id} style={styles.taskRow}>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.cardsRow}
+      >
+        {cardData.map(({ dateObj, dateKey, tasks, percent }) => {
+          const selected = dateKey === selectedDate;
+          return (
             <Pressable
-              style={[styles.check, task.done && styles.checkChecked]}
-              onPress={() => toggleTask(task.id)}
+              key={dateKey}
+              style={[styles.dayCard, selected && styles.dayCardSelected]}
+              onPress={() => setSelectedDate(dateKey)}
             >
-              {task.done && <Text style={styles.checkMark}>✓</Text>}
+              <View style={styles.dayHeader}>
+                <Text style={styles.dayName}>{format(dateObj, 'EEEE')}</Text>
+                <Text style={styles.dayDate}>{format(dateObj, 'dd.MM.yyyy')}</Text>
+              </View>
+
+              <ProgressRing percent={percent} />
+
+              <Text style={styles.tasksHeading}>Tasks</Text>
+              <View style={styles.tasksList}>
+                {tasks.length === 0 ? (
+                  <Text style={styles.empty}>No tasks</Text>
+                ) : (
+                  tasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onToggle={() => toggleTask(task.id)}
+                      onDelete={() =>
+                        Alert.alert('Delete task', `Remove "${task.title}"?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: () => deleteTask(task.id),
+                          },
+                        ])
+                      }
+                    />
+                  ))
+                )}
+              </View>
             </Pressable>
-            <Text style={[styles.taskTitle, task.done && styles.taskDone]} numberOfLines={1}>
-              {task.title}
-            </Text>
-            <Pressable
-              onPress={() =>
-                Alert.alert(
-                  'Delete task',
-                  `Remove "${task.title}"?`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => deleteTask(task.id) },
-                  ]
-                )
-              }
-              style={styles.delBtn}
-            >
-              <Text style={styles.delText}>✕</Text>
-            </Pressable>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
-      {sorted.length === 0 && (
-        <Text style={styles.empty}>No tasks for today. Add one above.</Text>
-      )}
+    </View>
+  );
+}
+
+function TaskRow({
+  task,
+  onToggle,
+  onDelete,
+}: {
+  task: DayTask;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <View style={styles.taskRow}>
+      <Pressable style={[styles.check, task.done && styles.checkChecked]} onPress={onToggle}>
+        {task.done && <Text style={styles.checkMark}>✓</Text>}
+      </Pressable>
+      <Text style={[styles.taskTitle, task.done && styles.taskDone]} numberOfLines={1}>
+        {task.title}
+      </Text>
+      <Pressable onPress={onDelete} style={styles.delBtn}>
+        <Text style={styles.delText}>✕</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: '600',
+  helperText: {
     color: theme.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.text,
-    marginBottom: 16,
+    fontSize: 12,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+    letterSpacing: 0.2,
   },
   inputRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   input: {
     flex: 1,
     borderWidth: 1,
     borderColor: theme.border,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     color: theme.text,
-    fontSize: 16,
+    fontSize: 15,
+    backgroundColor: '#0f1117',
   },
   addBtn: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     backgroundColor: theme.accent,
-    borderRadius: 8,
+    borderRadius: 12,
     justifyContent: 'center',
+    shadowColor: theme.accent,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   addBtnText: {
     color: theme.text,
     fontWeight: '600',
+    fontSize: 15,
   },
-  list: {
-    maxHeight: 320,
+  cardsRow: {
+    gap: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 2,
+  },
+  dayCard: {
+    width: CARD_W,
+    backgroundColor: '#12141b',
+    borderWidth: 1,
+    borderColor: '#2a2f3a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 7,
+  },
+  dayCardSelected: {
+    borderColor: theme.accent,
+    shadowColor: theme.accent,
+    shadowOpacity: 0.35,
+  },
+  dayHeader: {
+    backgroundColor: '#b91c1c',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.15)',
+  },
+  dayName: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  dayDate: {
+    color: '#fde7d7',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  ringWrap: {
+    marginTop: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringText: {
+    position: 'absolute',
+    fontSize: 28,
+    fontWeight: '700',
+    color: theme.text,
+  },
+  tasksHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#cbd5e1',
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  tasksList: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-    gap: 12,
+    borderBottomColor: '#262b36',
+    gap: 8,
   },
   check: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderRadius: 4,
     borderWidth: 2,
     borderColor: theme.textMuted,
@@ -159,28 +339,29 @@ const styles = StyleSheet.create({
   },
   checkMark: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   taskTitle: {
     flex: 1,
-    fontSize: 15,
-    color: theme.text,
+    fontSize: 14,
+    color: '#e2e8f0',
   },
   taskDone: {
     color: theme.textMuted,
     textDecorationLine: 'line-through',
   },
   delBtn: {
-    padding: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
   },
   delText: {
-    color: theme.textMuted,
-    fontSize: 16,
+    color: '#94a3b8',
+    fontSize: 14,
   },
   empty: {
     color: theme.textMuted,
-    fontSize: 14,
-    paddingVertical: 16,
+    fontSize: 13,
+    paddingVertical: 10,
   },
 });
