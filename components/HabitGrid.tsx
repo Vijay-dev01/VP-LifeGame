@@ -85,19 +85,11 @@ export function HabitGrid() {
     () => [...habits].sort((a, b) => a.order - b.order),
     [habits]
   );
-
-  if (habits.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>No habits yet. Add one to start.</Text>
-      </View>
-    );
-  }
-
   const rightMinWidth = dates.length * CELL;
   const todayIndex = dates.findIndex((d) => isSameDay(d, today));
 
   // On initial load (and when month changes), scroll so "today" is at the left edge.
+  // Keep this hook *before* any early return so hook count never changes.
   React.useEffect(() => {
     const monthKey = String(currentMonth);
     if (lastMonthKeyRef.current === monthKey) return;
@@ -112,6 +104,14 @@ export function HabitGrid() {
       });
     });
   }, [currentMonth, todayIndex]);
+
+  if (habits.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyText}>No habits yet. Add one to start.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.table}>
