@@ -30,6 +30,9 @@ interface AppState {
   completions: Record<string, string[]>;
   dayTasks: Record<string, DayTask[]>;
   currentMonth: string;
+  reportRecipient: string;
+  autoEmailMonthlyReport: boolean;
+  lastProcessedMonth: string | null;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
   toggleHabitDay: (habitId: string, date: string) => void;
@@ -39,6 +42,10 @@ interface AppState {
   toggleTask: (id: string) => void;
   getTasksForDate: (date: string) => DayTask[];
   setCurrentMonth: (date: string) => void;
+  setReportRecipient: (email: string) => void;
+  setAutoEmailMonthlyReport: (enabled: boolean) => void;
+  markMonthProcessed: (month: string) => void;
+  resetAllData: () => void;
   totalDoneThisMonth: () => number;
   bestStreak: () => { days: number; habitName: string };
   monthlyCompletionPercent: () => number;
@@ -140,6 +147,9 @@ export const useStore = create<AppState>()(
       completions: {},
       dayTasks: {},
       currentMonth: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+      reportRecipient: 'vijayajay3535@gmail.com',
+      autoEmailMonthlyReport: true,
+      lastProcessedMonth: null,
 
       addHabit: (habit) => {
         const order = get().habits.length;
@@ -210,6 +220,10 @@ export const useStore = create<AppState>()(
 
       getTasksForDate: (date) => get().dayTasks[date] ?? [],
       setCurrentMonth: (date) => set({ currentMonth: date }),
+      setReportRecipient: (email) => set({ reportRecipient: email }),
+      setAutoEmailMonthlyReport: (enabled) => set({ autoEmailMonthlyReport: enabled }),
+      markMonthProcessed: (month) => set({ lastProcessedMonth: month }),
+      resetAllData: () => set({ habits: [], completions: {}, dayTasks: {} }),
 
       totalDoneThisMonth: () => {
         const { completions, currentMonth } = get();
@@ -290,6 +304,9 @@ export const useStore = create<AppState>()(
         habits: s.habits,
         completions: s.completions,
         dayTasks: s.dayTasks,
+        reportRecipient: s.reportRecipient,
+        autoEmailMonthlyReport: s.autoEmailMonthlyReport,
+        lastProcessedMonth: s.lastProcessedMonth,
       }),
     }
   )

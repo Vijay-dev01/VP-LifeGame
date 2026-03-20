@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   barBg: {
-    width: 80,
+    width: 30,
     height: 8,
     backgroundColor: theme.surfaceLight,
     borderRadius: 4,
