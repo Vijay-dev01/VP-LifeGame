@@ -8,9 +8,10 @@ import {
   ScrollView,
   Alert,
   Animated,
+  Platform,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { addDays, format, startOfWeek } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 import type { DayTask } from '@/store';
@@ -86,7 +87,8 @@ export function MissionBoard() {
   const [newTitle, setNewTitle] = useState('');
 
   const weekDays = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    // Keep today's card at the leftmost position.
+    const start = new Date();
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
   }, []);
 
@@ -194,14 +196,28 @@ function TaskRow({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <View style={styles.taskRow}>
       <Pressable style={[styles.check, task.done && styles.checkChecked]} onPress={onToggle}>
         {task.done && <Text style={styles.checkMark}>✓</Text>}
       </Pressable>
-      <Text style={[styles.taskTitle, task.done && styles.taskDone]} numberOfLines={1}>
-        {task.title}
-      </Text>
+      <Pressable
+        style={{ flex: 1 }}
+        onLongPress={() => setExpanded(true)}
+        onPressOut={() => setExpanded(false)}
+        {...(Platform.OS === 'web'
+          ? ({
+              onHoverIn: () => setExpanded(true),
+              onHoverOut: () => setExpanded(false),
+            } as any)
+          : {})}
+      >
+        <Text style={[styles.taskTitle, task.done && styles.taskDone]} numberOfLines={expanded ? undefined : 1}>
+          {task.title}
+        </Text>
+      </Pressable>
       <Pressable onPress={onDelete} style={styles.delBtn}>
         <Text style={styles.delText}>✕</Text>
       </Pressable>
