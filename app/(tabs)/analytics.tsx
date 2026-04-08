@@ -106,8 +106,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: 6,
   },
   reportBtn: {
     backgroundColor: theme.surfaceLight,

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,14 @@ import {
   Animated,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { addDays, format, startOfWeek } from 'date-fns';
+import { eachDayOfInterval, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 import type { DayTask } from '@/store';
 
 const CARD_W = 280;
+const CARD_GAP = 12;
+const CARD_STRIDE = CARD_W + CARD_GAP;
 const RING_SIZE = 116;
 const RING_STROKE = 12;
 const R = (RING_SIZE - RING_STROKE) / 2;
@@ -84,11 +86,39 @@ export function MissionBoard() {
   const deleteTask = useStore((s) => s.deleteTask);
   const [selectedDate, setSelectedDate] = useState(today);
   const [newTitle, setNewTitle] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+  const contentWidthRef = useRef(0);
 
-  const weekDays = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, []);
+  // Current month only — same scope as the habit grid (chronological, scroll for past/future in-month).
+  const missionDays = useMemo(() => {
+    const now = new Date();
+    return eachDayOfInterval({ start: startOfMonth(now), end: endOfMonth(now) });
+  }, [today]);
+
+  const todayIndex = useMemo(() => {
+    const i = missionDays.findIndex((d) => format(d, 'yyyy-MM-dd') === today);
+    return i >= 0 ? i : 0;
+  }, [missionDays, today]);
+
+  useEffect(() => {
+    const keys = missionDays.map((d) => format(d, 'yyyy-MM-dd'));
+    setSelectedDate((prev) => (keys.includes(prev) ? prev : today));
+  }, [today, missionDays]);
+
+  const scrollToToday = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      x: todayIndex * CARD_STRIDE,
+      y: 0,
+      animated: false,
+    });
+  }, [todayIndex]);
+
+  // Align today to the leading edge (same idea as HabitGrid scrolling to today).
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToToday);
+    });
+  }, [today, scrollToToday]);
 
   const handleAdd = () => {
     const t = newTitle.trim();
@@ -100,7 +130,7 @@ export function MissionBoard() {
 
   const cardData = useMemo(
     () =>
-      weekDays.map((dateObj) => {
+      missionDays.map((dateObj) => {
         const dateKey = format(dateObj, 'yyyy-MM-dd');
         const tasks = [...(dayTasks[dateKey] ?? [])].sort((a, b) => a.order - b.order);
         const done = tasks.filter((t) => t.done).length;
@@ -112,7 +142,7 @@ export function MissionBoard() {
           percent: pct,
         };
       }),
-    [dayTasks, weekDays]
+    [dayTasks, missionDays]
   );
 
   return (
@@ -134,9 +164,15 @@ export function MissionBoard() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.cardsRow}
+        onContentSizeChange={(w) => {
+          if (w <= 0 || w === contentWidthRef.current) return;
+          contentWidthRef.current = w;
+          scrollToToday();
+        }}
       >
         {cardData.map(({ dateObj, dateKey, tasks, percent }) => {
           const selected = dateKey === selectedDate;
