@@ -15,6 +15,8 @@ export interface Habit {
   name: string;
   emoji: string;
   order: number;
+  notificationsEnabled?: boolean;
+  reminderTime?: string | null;
 }
 
 export interface DayTask {
@@ -25,16 +27,34 @@ export interface DayTask {
   order: number;
 }
 
+export interface NotificationSettings {
+  enabled: boolean;
+  weeklySummaryEnabled: boolean;
+  dailyLimit: 2 | 3;
+}
+
+export interface NotificationState {
+  date: string;
+  sentCount: number;
+  sentTypes: string[];
+}
+
 interface AppState {
   habits: Habit[];
   completions: Record<string, string[]>;
   dayTasks: Record<string, DayTask[]>;
+  notificationSettings: NotificationSettings;
+  notificationState: NotificationState;
   currentMonth: string;
   reportRecipient: string;
   autoEmailMonthlyReport: boolean;
   lastProcessedMonth: string | null;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
+  updateHabitNotification: (
+    habitId: string,
+    updates: { notificationsEnabled?: boolean; reminderTime?: string | null }
+  ) => void;
   toggleHabitDay: (habitId: string, date: string) => void;
   isHabitDone: (habitId: string, date: string) => boolean;
   addTask: (date: string, title: string) => void;
@@ -44,6 +64,11 @@ interface AppState {
   setCurrentMonth: (date: string) => void;
   setReportRecipient: (email: string) => void;
   setAutoEmailMonthlyReport: (enabled: boolean) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
+  setWeeklySummaryEnabled: (enabled: boolean) => void;
+  setDailyNotificationLimit: (limit: 2 | 3) => void;
+  markNotificationSent: (type: string, date: string) => void;
+  resetNotificationState: (date: string) => void;
   markMonthProcessed: (month: string) => void;
   resetAllData: () => void;
   totalDoneThisMonth: () => number;
@@ -146,6 +171,16 @@ export const useStore = create<AppState>()(
       habits: [],
       completions: {},
       dayTasks: {},
+      notificationSettings: {
+        enabled: true,
+        weeklySummaryEnabled: false,
+        dailyLimit: 3,
+      },
+      notificationState: {
+        date: '',
+        sentCount: 0,
+        sentTypes: [],
+      },
       currentMonth: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
       reportRecipient: 'vijayajay3535@gmail.com',
       autoEmailMonthlyReport: true,
@@ -154,7 +189,16 @@ export const useStore = create<AppState>()(
       addHabit: (habit) => {
         const order = get().habits.length;
         set((s) => ({
-          habits: [...s.habits, { ...habit, id: genId(), order }],
+          habits: [
+            ...s.habits,
+            {
+              ...habit,
+              notificationsEnabled: habit.notificationsEnabled ?? false,
+              reminderTime: habit.reminderTime ?? null,
+              id: genId(),
+              order,
+            },
+          ],
         }));
       },
 
@@ -168,6 +212,22 @@ export const useStore = create<AppState>()(
           }
           return { habits: next, completions };
         });
+      },
+
+      updateHabitNotification: (habitId, updates) => {
+        set((s) => ({
+          habits: s.habits.map((habit) =>
+            habit.id === habitId
+              ? {
+                  ...habit,
+                  notificationsEnabled:
+                    updates.notificationsEnabled ?? habit.notificationsEnabled ?? false,
+                  reminderTime:
+                    updates.reminderTime === undefined ? habit.reminderTime ?? null : updates.reminderTime,
+                }
+              : habit
+          ),
+        }));
       },
 
       toggleHabitDay: (habitId, date) => {
@@ -222,8 +282,55 @@ export const useStore = create<AppState>()(
       setCurrentMonth: (date) => set({ currentMonth: date }),
       setReportRecipient: (email) => set({ reportRecipient: email }),
       setAutoEmailMonthlyReport: (enabled) => set({ autoEmailMonthlyReport: enabled }),
+      setNotificationsEnabled: (enabled) =>
+        set((s) => ({
+          notificationSettings: { ...s.notificationSettings, enabled },
+        })),
+      setWeeklySummaryEnabled: (enabled) =>
+        set((s) => ({
+          notificationSettings: { ...s.notificationSettings, weeklySummaryEnabled: enabled },
+        })),
+      setDailyNotificationLimit: (limit) =>
+        set((s) => ({
+          notificationSettings: { ...s.notificationSettings, dailyLimit: limit },
+        })),
+      markNotificationSent: (type, date) =>
+        set((s) => {
+          const nextState =
+            s.notificationState.date === date
+              ? s.notificationState
+              : { date, sentCount: 0, sentTypes: [] };
+          if (nextState.sentTypes.includes(type)) {
+            return { notificationState: nextState };
+          }
+          return {
+            notificationState: {
+              date,
+              sentCount: nextState.sentCount + 1,
+              sentTypes: [...nextState.sentTypes, type],
+            },
+          };
+        }),
+      resetNotificationState: (date) =>
+        set({
+          notificationState: {
+            date,
+            sentCount: 0,
+            sentTypes: [],
+          },
+        }),
       markMonthProcessed: (month) => set({ lastProcessedMonth: month }),
-      resetAllData: () => set({ habits: [], completions: {}, dayTasks: {} }),
+      resetAllData: () =>
+        set({
+          habits: [],
+          completions: {},
+          dayTasks: {},
+          notificationState: {
+            date: '',
+            sentCount: 0,
+            sentTypes: [],
+          },
+        }),
 
       totalDoneThisMonth: () => {
         const { completions, currentMonth } = get();
@@ -304,6 +411,8 @@ export const useStore = create<AppState>()(
         habits: s.habits,
         completions: s.completions,
         dayTasks: s.dayTasks,
+        notificationSettings: s.notificationSettings,
+        notificationState: s.notificationState,
         reportRecipient: s.reportRecipient,
         autoEmailMonthlyReport: s.autoEmailMonthlyReport,
         lastProcessedMonth: s.lastProcessedMonth,

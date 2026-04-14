@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Modal,
   View,
   Text,
@@ -38,14 +39,29 @@ const EMOJIS = [
 export function AddHabitModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(EMOJIS[0]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState('08:30');
   const addHabit = useStore((s) => s.addHabit);
 
   const submit = () => {
     const t = name.trim();
+    const cleanedTime = reminderTime.trim();
+    const hasValidTime = /^([01]\d|2[0-3]):([0-5]\d)$/.test(cleanedTime);
+    if (notificationsEnabled && !hasValidTime) {
+      Alert.alert('Invalid time', 'Use 24h format HH:mm, e.g. 08:30');
+      return;
+    }
     if (t) {
-      addHabit({ name: t, emoji });
+      addHabit({
+        name: t,
+        emoji,
+        notificationsEnabled,
+        reminderTime: notificationsEnabled ? cleanedTime : null,
+      });
       setName('');
       setEmoji(EMOJIS[0]);
+      setNotificationsEnabled(false);
+      setReminderTime('08:30');
       onClose();
     }
   };
@@ -90,6 +106,32 @@ export function AddHabitModal({ visible, onClose }: { visible: boolean; onClose:
               autoCapitalize="none"
               keyboardType="default"
             />
+
+            <View style={styles.notifyRow}>
+              <Text style={styles.notifyLabel}>Habit reminder</Text>
+              <Pressable
+                onPress={() => setNotificationsEnabled((v) => !v)}
+                style={[styles.toggleBtn, notificationsEnabled && styles.toggleBtnOn]}
+              >
+                <Text style={styles.toggleBtnText}>
+                  {notificationsEnabled ? 'ON' : 'OFF'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {notificationsEnabled ? (
+              <TextInput
+                style={styles.timeInput}
+                placeholder="HH:mm"
+                placeholderTextColor={theme.textMuted}
+                value={reminderTime}
+                onChangeText={setReminderTime}
+                autoCorrect={false}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            ) : null}
 
             <View style={styles.actions}>
               <Pressable onPress={onClose} style={styles.cancelBtn}>
@@ -175,6 +217,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 12,
+  },
+  notifyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  notifyLabel: {
+    color: theme.textMuted,
+    fontSize: 14,
+  },
+  toggleBtn: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: theme.surfaceLight,
+  },
+  toggleBtnOn: {
+    borderColor: theme.accent,
+    backgroundColor: 'rgba(220,38,38,0.2)',
+  },
+  toggleBtnText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  timeInput: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    padding: 10,
+    color: theme.text,
+    fontSize: 16,
+    marginBottom: 16,
   },
   cancelBtn: {
     paddingVertical: 10,

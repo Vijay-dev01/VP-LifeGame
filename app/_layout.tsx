@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { useMonthlyLifecycle } from '@/hooks/useMonthlyLifecycle';
+import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -48,6 +49,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   useMonthlyLifecycle();
+  useSmartNotifications();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
