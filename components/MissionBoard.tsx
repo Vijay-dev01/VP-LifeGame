@@ -230,14 +230,32 @@ function TaskRow({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  const showFullTitle = () => {
+    if (!isTruncated) return;
+    Alert.alert('Task', task.title, [{ text: 'OK' }]);
+  };
+
   return (
     <View style={styles.taskRow}>
       <Pressable style={[styles.check, task.done && styles.checkChecked]} onPress={onToggle}>
         {task.done && <Text style={styles.checkMark}>✓</Text>}
       </Pressable>
-      <Text style={[styles.taskTitle, task.done && styles.taskDone]} numberOfLines={1}>
-        {task.title}
-      </Text>
+      <Pressable style={styles.taskTitleWrap} onLongPress={showFullTitle} delayLongPress={400}>
+        <Text
+          style={[styles.taskTitle, task.done && styles.taskDone]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          onTextLayout={(e) => {
+            const line = e.nativeEvent.lines[0];
+            if (!line) return;
+            setIsTruncated(line.text !== task.title);
+          }}
+        >
+          {task.title}
+        </Text>
+      </Pressable>
       <Pressable onPress={onDelete} style={styles.delBtn}>
         <Text style={styles.delText}>✕</Text>
       </Pressable>
@@ -378,8 +396,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  taskTitle: {
+  taskTitleWrap: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  taskTitle: {
     fontSize: 14,
     color: '#e2e8f0',
   },
