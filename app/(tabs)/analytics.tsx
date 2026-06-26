@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Header } from '@/components/Header';
 import { ConsistencyChart } from '@/components/ConsistencyChart';
 import { HabitBreakdown } from '@/components/HabitBreakdown';
+import { LifeAnalytics } from '@/components/life-log/LifeAnalytics';
 import { theme } from '@/constants/theme';
 import { useStore } from '@/store';
 import { emailMonthlyPdf, shareMonthlyPdf } from '@/utils/monthlyReport';
@@ -37,7 +38,7 @@ export default function AnalyticsScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert('Reset data?', 'This clears habits, completions, and mission tasks.', [
+    Alert.alert('Reset data?', 'This clears habits, completions, mission tasks, and life logs.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reset',
@@ -60,6 +61,7 @@ export default function AnalyticsScreen() {
 
         <ConsistencyChart />
         <HabitBreakdown />
+        <LifeAnalytics />
       </ScrollView>
 
       <Modal

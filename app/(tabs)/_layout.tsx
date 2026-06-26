@@ -1,5 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { Clock } from 'lucide-react-native';
 import { Text } from 'react-native';
 import { theme } from '@/constants/theme';
 
@@ -25,6 +26,13 @@ export default function TabLayout() {
         options={{
           title: 'Missions',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>✓</Text>,
+        }}
+      />
+      <Tabs.Screen
+        name="life-log"
+        options={{
+          title: 'Life Log',
+          tabBarIcon: ({ color }) => <Clock size={20} color={color} />,
         }}
       />
       <Tabs.Screen

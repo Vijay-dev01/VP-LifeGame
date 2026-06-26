@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createSafeStorage } from './persist';
+import { getDefaultTitleForCategory } from '@/constants/lifeLogCategories';
+import { calcDurationMinutes, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
   addDays,
   differenceInCalendarDays,
   endOfMonth,
   format,
   getDate,
+  parseISO,
   startOfMonth,
 } from 'date-fns';
 
@@ -39,6 +42,33 @@ export interface NotificationState {
   sentTypes: string[];
 }
 
+export type LifeLogIntent = 'planned' | 'unplanned';
+export type LifeLogMood = 'happy' | 'calm' | 'stressed' | 'bored' | 'tired';
+
+export interface LifeLog {
+  id: string;
+  title: string;
+  category: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  notes?: string;
+  energyLevel?: number;
+  mood?: LifeLogMood;
+  intentType: LifeLogIntent;
+  createdAt: string;
+}
+
+export interface ActiveTimer {
+  title: string;
+  category: string;
+  startTime: string;
+}
+
+export type LifeLogInput = Omit<LifeLog, 'id' | 'duration' | 'createdAt'> & {
+  duration?: number;
+};
+
 interface AppState {
   habits: Habit[];
   completions: Record<string, string[]>;
@@ -49,6 +79,9 @@ interface AppState {
   reportRecipient: string;
   autoEmailMonthlyReport: boolean;
   lastProcessedMonth: string | null;
+  lifeLogs: LifeLog[];
+  activeTimer: ActiveTimer | null;
+  recentActivityKeys: string[];
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
   updateHabitNotification: (
@@ -61,6 +94,19 @@ interface AppState {
   deleteTask: (id: string) => void;
   toggleTask: (id: string) => void;
   getTasksForDate: (date: string) => DayTask[];
+  addLifeLog: (entry: LifeLogInput) => string | null;
+  updateLifeLog: (id: string, patch: Partial<LifeLogInput>) => boolean;
+  deleteLifeLog: (id: string) => void;
+  duplicateLifeLog: (id: string) => string | null;
+  startTimer: (category: string, title?: string) => void;
+  stopTimer: (overrides?: {
+    title?: string;
+    notes?: string;
+    mood?: LifeLogMood;
+    energyLevel?: number;
+    intentType?: LifeLogIntent;
+  }) => string | null;
+  getLifeLogsForDate: (date: string) => LifeLog[];
   setCurrentMonth: (date: string) => void;
   setReportRecipient: (email: string) => void;
   setAutoEmailMonthlyReport: (enabled: boolean) => void;
@@ -185,6 +231,9 @@ export const useStore = create<AppState>()(
       reportRecipient: 'vijayajay3535@gmail.com',
       autoEmailMonthlyReport: true,
       lastProcessedMonth: null,
+      lifeLogs: [],
+      activeTimer: null,
+      recentActivityKeys: [],
 
       addHabit: (habit) => {
         const order = get().habits.length;
@@ -279,6 +328,115 @@ export const useStore = create<AppState>()(
       },
 
       getTasksForDate: (date) => get().dayTasks[date] ?? [],
+
+      addLifeLog: (entry) => {
+        const err = validateLifeLogTimes(entry.startTime, entry.endTime);
+        if (err) return null;
+        const duration = entry.duration ?? calcDurationMinutes(entry.startTime, entry.endTime);
+        const id = genId();
+        const log: LifeLog = {
+          ...entry,
+          id,
+          duration,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({
+          lifeLogs: [...s.lifeLogs, log],
+          recentActivityKeys: pushRecentKey(s.recentActivityKeys, entry.category, entry.title),
+        }));
+        return id;
+      },
+
+      updateLifeLog: (id, patch) => {
+        const existing = get().lifeLogs.find((l) => l.id === id);
+        if (!existing) return false;
+        const startTime = patch.startTime ?? existing.startTime;
+        const endTime = patch.endTime ?? existing.endTime;
+        const err = validateLifeLogTimes(startTime, endTime);
+        if (err) return false;
+        const duration = calcDurationMinutes(startTime, endTime);
+        set((s) => ({
+          lifeLogs: s.lifeLogs.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  ...patch,
+                  startTime,
+                  endTime,
+                  duration,
+                }
+              : l
+          ),
+          recentActivityKeys:
+            patch.category || patch.title
+              ? pushRecentKey(
+                  s.recentActivityKeys,
+                  patch.category ?? existing.category,
+                  patch.title ?? existing.title
+                )
+              : s.recentActivityKeys,
+        }));
+        return true;
+      },
+
+      deleteLifeLog: (id) => {
+        set((s) => ({
+          lifeLogs: s.lifeLogs.filter((l) => l.id !== id),
+        }));
+      },
+
+      duplicateLifeLog: (id) => {
+        const existing = get().lifeLogs.find((l) => l.id === id);
+        if (!existing) return null;
+        const now = new Date();
+        const durationMs = existing.duration * 60 * 1000;
+        const endTime = now.toISOString();
+        const startTime = new Date(now.getTime() - durationMs).toISOString();
+        return get().addLifeLog({
+          title: existing.title,
+          category: existing.category,
+          startTime,
+          endTime,
+          notes: existing.notes,
+          energyLevel: existing.energyLevel,
+          mood: existing.mood,
+          intentType: existing.intentType,
+        });
+      },
+
+      startTimer: (category, title) => {
+        const resolvedTitle = title?.trim() || getDefaultTitleForCategory(category);
+        const startTime = new Date().toISOString();
+        set({
+          activeTimer: { category, title: resolvedTitle, startTime },
+        });
+      },
+
+      stopTimer: (overrides) => {
+        const timer = get().activeTimer;
+        if (!timer) return null;
+        const endTime = new Date().toISOString();
+        const title = overrides?.title?.trim() || timer.title;
+        const id = get().addLifeLog({
+          title,
+          category: timer.category,
+          startTime: timer.startTime,
+          endTime,
+          notes: overrides?.notes,
+          mood: overrides?.mood,
+          energyLevel: overrides?.energyLevel,
+          intentType: overrides?.intentType ?? 'unplanned',
+        });
+        set({ activeTimer: null });
+        return id;
+      },
+
+      getLifeLogsForDate: (date) => {
+        return get()
+          .lifeLogs.filter((l) => format(parseISO(l.startTime), 'yyyy-MM-dd') === date)
+          .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+      },
+
       setCurrentMonth: (date) => set({ currentMonth: date }),
       setReportRecipient: (email) => set({ reportRecipient: email }),
       setAutoEmailMonthlyReport: (enabled) => set({ autoEmailMonthlyReport: enabled }),
@@ -325,6 +483,9 @@ export const useStore = create<AppState>()(
           habits: [],
           completions: {},
           dayTasks: {},
+          lifeLogs: [],
+          activeTimer: null,
+          recentActivityKeys: [],
           notificationState: {
             date: '',
             sentCount: 0,
@@ -411,6 +572,8 @@ export const useStore = create<AppState>()(
         habits: s.habits,
         completions: s.completions,
         dayTasks: s.dayTasks,
+        lifeLogs: s.lifeLogs,
+        recentActivityKeys: s.recentActivityKeys,
         notificationSettings: s.notificationSettings,
         notificationState: s.notificationState,
         reportRecipient: s.reportRecipient,
