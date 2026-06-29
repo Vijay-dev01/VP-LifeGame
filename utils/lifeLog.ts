@@ -19,6 +19,18 @@ export function formatDurationHours(minutes: number): string {
   return hours % 1 === 0 ? `${hours}h` : `${hours.toFixed(1)}h`;
 }
 
+export function getTimerElapsedSeconds(startTime: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000));
+}
+
+export function formatTimerElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function getLogDateKey(log: LifeLog): string {
   return format(parseISO(log.startTime), 'yyyy-MM-dd');
 }

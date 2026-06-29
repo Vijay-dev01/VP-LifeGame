@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { useMonthlyLifecycle } from '@/hooks/useMonthlyLifecycle';
+import { useLifeLogTimerSync } from '@/hooks/useLifeLogTimerSync';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 
 export {
@@ -50,6 +51,7 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   useMonthlyLifecycle();
   useSmartNotifications();
+  useLifeLogTimerSync();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
