@@ -1,24 +1,30 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useStore } from '@/store';
-import { computeHabitCompletionPercent } from '@/store';
-import { theme } from '@/constants/theme';
+import { theme } from "@/constants/theme";
+import { computeHabitCompletionPercent, useStore } from "@/store";
+import React, { useMemo } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export function HabitBreakdown() {
   const habits = useStore((s) => s.habits);
   const completions = useStore((s) => s.completions);
   const currentMonth = useStore((s) => s.currentMonth);
-  const sorted = useMemo(() => [...habits].sort((a, b) => a.order - b.order), [habits]);
+  const sorted = useMemo(
+    () => [...habits].sort((a, b) => a.order - b.order),
+    [habits],
+  );
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>HABIT BREAKDOWN</Text>
-      <ScrollView style={styles.list}>
+      <ScrollView style={styles.list} nestedScrollEnabled={true}>
         {sorted.length === 0 ? (
           <Text style={styles.empty}>No habits to show.</Text>
         ) : (
           sorted.map((habit) => {
-            const pct = computeHabitCompletionPercent(habit.id, completions, currentMonth);
+            const pct = computeHabitCompletionPercent(
+              habit.id,
+              completions,
+              currentMonth,
+            );
             return (
               <View key={habit.id} style={styles.row}>
                 <Text style={styles.name} numberOfLines={1}>
@@ -50,7 +56,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     color: theme.textMuted,
     letterSpacing: 0.5,
     marginBottom: 12,
@@ -59,9 +65,9 @@ const styles = StyleSheet.create({
     maxHeight: 280,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
     paddingVertical: 8,
     borderBottomWidth: 1,
@@ -73,8 +79,8 @@ const styles = StyleSheet.create({
     color: theme.text,
   },
   barWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     width: 100,
   },
@@ -83,10 +89,10 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: theme.surfaceLight,
     borderRadius: 3,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   barFill: {
-    height: '100%',
+    height: "100%",
     backgroundColor: theme.accent,
     borderRadius: 3,
   },
@@ -94,7 +100,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.textMuted,
     width: 28,
-    textAlign: 'right',
+    textAlign: "right",
   },
   empty: {
     color: theme.textMuted,
