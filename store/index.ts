@@ -579,6 +579,7 @@ export const useStore = create<AppState>()(
         reportRecipient: s.reportRecipient,
         autoEmailMonthlyReport: s.autoEmailMonthlyReport,
         lastProcessedMonth: s.lastProcessedMonth,
+        activeTimer: s.activeTimer,
       }),
     }
   )
