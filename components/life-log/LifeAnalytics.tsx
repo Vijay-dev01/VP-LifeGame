@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLifeAnalytics } from '@/hooks/useLifeAnalytics';
 import { getCategoryById } from '@/constants/lifeLogCategories';
 import { theme } from '@/constants/theme';
 import { formatDurationHours } from '@/utils/lifeLog';
+import { useStore } from '@/store';
+import { computeReflectionInsights, formatReflectionInsight } from '@/utils/reflectionInsights';
+import { fetchAiDistractionInsight } from '@/utils/aiInsights';
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -16,6 +19,18 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function LifeAnalytics() {
   const { metrics, insights } = useLifeAnalytics();
+  const reflections = useStore((s) => s.reflections);
+  const aiSettings = useStore((s) => s.aiSettings);
+  const reflectionInsight = computeReflectionInsights(reflections);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!aiSettings.enabled || !aiSettings.apiKey) {
+      setAiInsight(null);
+      return;
+    }
+    fetchAiDistractionInsight(aiSettings.apiKey, reflections).then(setAiInsight);
+  }, [aiSettings.enabled, aiSettings.apiKey, reflections]);
 
   return (
     <View style={styles.card}>
@@ -77,6 +92,20 @@ export function LifeAnalytics() {
               </View>
             );
           })}
+        </View>
+      ) : null}
+
+      {reflections.length > 0 ? (
+        <View style={styles.insights}>
+          <Text style={styles.breakdownTitle}>DISTRACTION PATTERNS</Text>
+          <View style={styles.insightCard}>
+            <Text style={styles.insightText}>{formatReflectionInsight(reflectionInsight)}</Text>
+          </View>
+          {aiInsight ? (
+            <View style={styles.insightCard}>
+              <Text style={styles.insightText}>{aiInsight}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
 

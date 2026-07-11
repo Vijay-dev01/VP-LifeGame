@@ -5,6 +5,7 @@ import { Header } from '@/components/Header';
 import { StatsCards } from '@/components/StatsCards';
 import { HabitGrid } from '@/components/HabitGrid';
 import { AddHabitModal } from '@/components/AddHabitModal';
+import { XPBadge } from '@/components/XPBadge';
 import { theme } from '@/constants/theme';
 import { useStore } from '@/store';
 
@@ -18,6 +19,7 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Header />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <XPBadge />
         <View style={styles.topRow}>
           <View style={styles.notificationInline}>
             <Text style={styles.notificationLabel}>Notifications</Text>

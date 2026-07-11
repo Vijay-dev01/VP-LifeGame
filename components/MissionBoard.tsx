@@ -78,7 +78,7 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-export function MissionBoard() {
+export function MissionBoard({ onPlanTomorrow }: { onPlanTomorrow?: () => void }) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const dayTasks = useStore((s) => s.dayTasks);
   const addTask = useStore((s) => s.addTask);
@@ -147,6 +147,11 @@ export function MissionBoard() {
 
   return (
     <View>
+      {onPlanTomorrow ? (
+        <Pressable style={styles.planBtn} onPress={onPlanTomorrow}>
+          <Text style={styles.planBtnText}>Plan Tomorrow</Text>
+        </Pressable>
+      ) : null}
       <Text style={styles.helperText}>Tap a day card to set where new tasks will be added.</Text>
       <View style={styles.inputRow}>
         <TextInput
@@ -264,6 +269,20 @@ function TaskRow({
 }
 
 const styles = StyleSheet.create({
+  planBtn: {
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  planBtnText: {
+    fontWeight: '800',
+    color: theme.text,
+    fontSize: 13,
+  },
   helperText: {
     color: theme.textMuted,
     fontSize: 12,

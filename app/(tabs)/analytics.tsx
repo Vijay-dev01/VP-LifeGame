@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Header } from '@/components/Header';
 import { ConsistencyChart } from '@/components/ConsistencyChart';
@@ -14,6 +14,8 @@ export default function AnalyticsScreen() {
   const currentMonth = useStore((s) => s.currentMonth);
   const reportRecipient = useStore((s) => s.reportRecipient);
   const resetAllData = useStore((s) => s.resetAllData);
+  const aiSettings = useStore((s) => s.aiSettings);
+  const setAiSettings = useStore((s) => s.setAiSettings);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
@@ -61,6 +63,26 @@ export default function AnalyticsScreen() {
 
         <ConsistencyChart />
         <HabitBreakdown />
+        <View style={styles.aiCard}>
+          <Text style={styles.aiTitle}>AI Insights (optional)</Text>
+          <Pressable
+            style={[styles.aiToggle, aiSettings.enabled && styles.aiToggleOn]}
+            onPress={() => setAiSettings({ enabled: !aiSettings.enabled })}
+          >
+            <Text style={styles.aiToggleText}>{aiSettings.enabled ? 'ON' : 'OFF'}</Text>
+          </Pressable>
+          {aiSettings.enabled ? (
+            <TextInput
+              style={styles.aiInput}
+              value={aiSettings.apiKey}
+              onChangeText={(apiKey) => setAiSettings({ apiKey })}
+              placeholder="OpenAI API key"
+              placeholderTextColor={theme.textMuted}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          ) : null}
+        </View>
         <LifeAnalytics />
       </ScrollView>
 
@@ -190,5 +212,49 @@ const styles = StyleSheet.create({
   },
   modalBtnTextDanger: {
     color: theme.accent,
+  },
+  aiCard: {
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
+  },
+  aiTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textMuted,
+    flex: 1,
+  },
+  aiToggle: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  aiToggleOn: {
+    borderColor: theme.accent,
+    backgroundColor: 'rgba(220,38,38,0.1)',
+  },
+  aiToggleText: {
+    fontWeight: '700',
+    color: theme.text,
+    fontSize: 12,
+  },
+  aiInput: {
+    width: '100%',
+    backgroundColor: theme.surfaceLight,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 8,
+    padding: 10,
+    color: theme.text,
+    fontSize: 12,
   },
 });

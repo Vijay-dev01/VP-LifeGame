@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createSafeStorage } from './persist';
 import { getDefaultTitleForCategory } from '@/constants/lifeLogCategories';
-import { calcDurationMinutes, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
+import { calcActivityXp, HABIT_XP_BONUS } from '@/constants/xp';
+import { calcDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
   addDays,
   differenceInCalendarDays,
@@ -63,6 +64,43 @@ export interface ActiveTimer {
   title: string;
   category: string;
   startTime: string;
+  sessionStartTime: string;
+  pausedAt?: string | null;
+  accumulatedSeconds?: number;
+}
+
+export interface XpEntry {
+  id: string;
+  amount: number;
+  reason: string;
+  date: string;
+}
+
+export interface DayPlanItem {
+  id: string;
+  date: string;
+  time: string;
+  title: string;
+  category: string;
+  done?: boolean;
+}
+
+export type DistractionType = 'meeting' | 'phone' | 'youtube' | 'nothing' | 'other';
+
+export interface NightlyReflection {
+  date: string;
+  distraction: DistractionType;
+  note?: string;
+}
+
+export interface AiSettings {
+  enabled: boolean;
+  apiKey: string;
+}
+
+export interface ForgotToStopState {
+  lastPromptDate: string | null;
+  thresholdHours: number;
 }
 
 export type LifeLogInput = Omit<LifeLog, 'id' | 'duration' | 'createdAt'> & {
@@ -82,6 +120,14 @@ interface AppState {
   lifeLogs: LifeLog[];
   activeTimer: ActiveTimer | null;
   recentActivityKeys: string[];
+  xpTotal: number;
+  xpHistory: XpEntry[];
+  dayPlans: Record<string, DayPlanItem[]>;
+  dailyGoalScore: number;
+  reflections: NightlyReflection[];
+  aiSettings: AiSettings;
+  forgotToStopState: ForgotToStopState;
+  pendingStopFromNotification: boolean;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
   updateHabitNotification: (
@@ -99,6 +145,8 @@ interface AppState {
   deleteLifeLog: (id: string) => void;
   duplicateLifeLog: (id: string) => string | null;
   startTimer: (category: string, title?: string) => void;
+  pauseTimer: () => void;
+  resumeTimer: () => void;
   stopTimer: (overrides?: {
     title?: string;
     notes?: string;
@@ -106,6 +154,29 @@ interface AppState {
     energyLevel?: number;
     intentType?: LifeLogIntent;
   }) => string | null;
+  stopTimerAt: (
+    endTimeIso: string,
+    overrides?: {
+      title?: string;
+      notes?: string;
+      mood?: LifeLogMood;
+      energyLevel?: number;
+      intentType?: LifeLogIntent;
+    }
+  ) => string | null;
+  discardTimer: () => void;
+  awardXp: (amount: number, reason: string) => void;
+  addPlanItem: (date: string, item: Omit<DayPlanItem, 'id' | 'date'>) => void;
+  removePlanItem: (date: string, id: string) => void;
+  getPlanForDate: (date: string) => DayPlanItem[];
+  setDailyGoalScore: (score: number) => void;
+  markPlanItemDone: (date: string, id: string) => void;
+  addReflection: (reflection: Omit<NightlyReflection, 'date'> & { date?: string }) => void;
+  getReflectionForDate: (date: string) => NightlyReflection | undefined;
+  setAiSettings: (settings: Partial<AiSettings>) => void;
+  setForgotToStopThreshold: (hours: number) => void;
+  markForgotToStopPrompted: (date: string) => void;
+  setPendingStopFromNotification: (pending: boolean) => void;
   getLifeLogsForDate: (date: string) => LifeLog[];
   setCurrentMonth: (date: string) => void;
   setReportRecipient: (email: string) => void;
@@ -234,6 +305,14 @@ export const useStore = create<AppState>()(
       lifeLogs: [],
       activeTimer: null,
       recentActivityKeys: [],
+      xpTotal: 0,
+      xpHistory: [],
+      dayPlans: {},
+      dailyGoalScore: 90,
+      reflections: [],
+      aiSettings: { enabled: false, apiKey: '' },
+      forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
+      pendingStopFromNotification: false,
 
       addHabit: (habit) => {
         const order = get().habits.length;
@@ -287,6 +366,10 @@ export const useStore = create<AppState>()(
           const completions = { ...s.completions };
           if (next.length) completions[date] = next;
           else delete completions[date];
+          if (!has) {
+            const habit = s.habits.find((h) => h.id === habitId);
+            get().awardXp(HABIT_XP_BONUS, habit?.name ?? 'Habit');
+          }
           return { completions };
         });
       },
@@ -408,8 +491,54 @@ export const useStore = create<AppState>()(
         const resolvedTitle = title?.trim() || getDefaultTitleForCategory(category);
         const startTime = new Date().toISOString();
         set({
-          activeTimer: { category, title: resolvedTitle, startTime },
+          activeTimer: {
+            category,
+            title: resolvedTitle,
+            startTime,
+            sessionStartTime: startTime,
+            pausedAt: null,
+            accumulatedSeconds: 0,
+          },
         });
+      },
+
+      pauseTimer: () => {
+        const timer = get().activeTimer;
+        if (!timer || timer.pausedAt) return;
+        const elapsed = getTimerElapsedSeconds(timer);
+        set({
+          activeTimer: {
+            ...timer,
+            pausedAt: new Date().toISOString(),
+            accumulatedSeconds: elapsed,
+          },
+        });
+      },
+
+      resumeTimer: () => {
+        const timer = get().activeTimer;
+        if (!timer || !timer.pausedAt) return;
+        set({
+          activeTimer: {
+            ...timer,
+            startTime: new Date().toISOString(),
+            pausedAt: null,
+          },
+        });
+      },
+
+      awardXp: (amount, reason) => {
+        if (amount <= 0) return;
+        const entry: XpEntry = {
+          id: genId(),
+          amount,
+          reason,
+          date: format(new Date(), 'yyyy-MM-dd'),
+        };
+        set((s) => ({
+          xpTotal: s.xpTotal + amount,
+          xpHistory: [entry, ...s.xpHistory].slice(0, 100),
+        }));
       },
 
       stopTimer: (overrides) => {
@@ -420,15 +549,45 @@ export const useStore = create<AppState>()(
         const id = get().addLifeLog({
           title,
           category: timer.category,
-          startTime: timer.startTime,
+          startTime: timer.sessionStartTime ?? timer.startTime,
           endTime,
           notes: overrides?.notes,
           mood: overrides?.mood,
           energyLevel: overrides?.energyLevel,
           intentType: overrides?.intentType ?? 'unplanned',
         });
-        set({ activeTimer: null });
+        if (id) {
+          get().awardXp(calcActivityXp(timer.category, title), title);
+        }
+        set({ activeTimer: null, pendingStopFromNotification: false });
         return id;
+      },
+
+      stopTimerAt: (endTimeIso, overrides) => {
+        const timer = get().activeTimer;
+        if (!timer) return null;
+        const title = overrides?.title?.trim() || timer.title;
+        const err = validateLifeLogTimes(timer.sessionStartTime ?? timer.startTime, endTimeIso);
+        if (err) return null;
+        const id = get().addLifeLog({
+          title,
+          category: timer.category,
+          startTime: timer.sessionStartTime ?? timer.startTime,
+          endTime: endTimeIso,
+          notes: overrides?.notes,
+          mood: overrides?.mood,
+          energyLevel: overrides?.energyLevel,
+          intentType: overrides?.intentType ?? 'unplanned',
+        });
+        if (id) {
+          get().awardXp(calcActivityXp(timer.category, title), title);
+        }
+        set({ activeTimer: null, pendingStopFromNotification: false });
+        return id;
+      },
+
+      discardTimer: () => {
+        set({ activeTimer: null, pendingStopFromNotification: false });
       },
 
       getLifeLogsForDate: (date) => {
@@ -436,6 +595,69 @@ export const useStore = create<AppState>()(
           .lifeLogs.filter((l) => format(parseISO(l.startTime), 'yyyy-MM-dd') === date)
           .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
       },
+
+      addPlanItem: (date, item) => {
+        const plans = get().dayPlans[date] ?? [];
+        const newItem: DayPlanItem = { ...item, id: genId(), date };
+        const sorted = [...plans, newItem].sort((a, b) => a.time.localeCompare(b.time));
+        set((s) => ({
+          dayPlans: { ...s.dayPlans, [date]: sorted },
+        }));
+      },
+
+      removePlanItem: (date, id) => {
+        set((s) => {
+          const plans = (s.dayPlans[date] ?? []).filter((p) => p.id !== id);
+          const next = { ...s.dayPlans };
+          if (plans.length) next[date] = plans;
+          else delete next[date];
+          return { dayPlans: next };
+        });
+      },
+
+      getPlanForDate: (date) => get().dayPlans[date] ?? [],
+
+      setDailyGoalScore: (score) => set({ dailyGoalScore: Math.min(100, Math.max(0, score)) }),
+
+      markPlanItemDone: (date, id) => {
+        set((s) => ({
+          dayPlans: {
+            ...s.dayPlans,
+            [date]: (s.dayPlans[date] ?? []).map((p) =>
+              p.id === id ? { ...p, done: true } : p
+            ),
+          },
+        }));
+      },
+
+      addReflection: (reflection) => {
+        const date = reflection.date ?? format(new Date(), 'yyyy-MM-dd');
+        set((s) => ({
+          reflections: [
+            ...s.reflections.filter((r) => r.date !== date),
+            { distraction: reflection.distraction, note: reflection.note, date },
+          ],
+        }));
+      },
+
+      getReflectionForDate: (date) => get().reflections.find((r) => r.date === date),
+
+      setAiSettings: (settings) =>
+        set((s) => ({
+          aiSettings: { ...s.aiSettings, ...settings },
+        })),
+
+      setForgotToStopThreshold: (hours) =>
+        set((s) => ({
+          forgotToStopState: { ...s.forgotToStopState, thresholdHours: hours },
+        })),
+
+      markForgotToStopPrompted: (date) =>
+        set((s) => ({
+          forgotToStopState: { ...s.forgotToStopState, lastPromptDate: date },
+        })),
+
+      setPendingStopFromNotification: (pending) => set({ pendingStopFromNotification: pending }),
 
       setCurrentMonth: (date) => set({ currentMonth: date }),
       setReportRecipient: (email) => set({ reportRecipient: email }),
@@ -486,6 +708,14 @@ export const useStore = create<AppState>()(
           lifeLogs: [],
           activeTimer: null,
           recentActivityKeys: [],
+          xpTotal: 0,
+          xpHistory: [],
+          dayPlans: {},
+          dailyGoalScore: 90,
+          reflections: [],
+          aiSettings: { enabled: false, apiKey: '' },
+          forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
+          pendingStopFromNotification: false,
           notificationState: {
             date: '',
             sentCount: 0,
@@ -580,6 +810,13 @@ export const useStore = create<AppState>()(
         autoEmailMonthlyReport: s.autoEmailMonthlyReport,
         lastProcessedMonth: s.lastProcessedMonth,
         activeTimer: s.activeTimer,
+        xpTotal: s.xpTotal,
+        xpHistory: s.xpHistory,
+        dayPlans: s.dayPlans,
+        dailyGoalScore: s.dailyGoalScore,
+        reflections: s.reflections,
+        aiSettings: s.aiSettings,
+        forgotToStopState: s.forgotToStopState,
       }),
     }
   )

@@ -15,10 +15,19 @@ interface ActiveTimerBarProps {
   categoryId: string;
   title: string;
   elapsedSeconds: number;
+  isPaused?: boolean;
   onStop: () => void;
+  onTogglePause: () => void;
 }
 
-export function ActiveTimerBar({ categoryId, title, elapsedSeconds, onStop }: ActiveTimerBarProps) {
+export function ActiveTimerBar({
+  categoryId,
+  title,
+  elapsedSeconds,
+  isPaused,
+  onStop,
+  onTogglePause,
+}: ActiveTimerBarProps) {
   const cat = getCategoryById(categoryId);
   const pulse = useSharedValue(1);
 
@@ -37,15 +46,20 @@ export function ActiveTimerBar({ categoryId, title, elapsedSeconds, onStop }: Ac
   return (
     <Animated.View style={[styles.bar, pulseStyle, cat && { borderColor: `${cat.color}66` }]}>
       <View style={styles.left}>
-        <Text style={styles.label}>TIMER RUNNING</Text>
+        <Text style={styles.label}>{isPaused ? 'TIMER PAUSED' : 'TIMER RUNNING'}</Text>
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
         <Text style={[styles.time, cat && { color: cat.color }]}>{formatElapsed(elapsedSeconds)}</Text>
       </View>
-      <Pressable style={styles.stopBtn} onPress={onStop}>
-        <Text style={styles.stopText}>STOP</Text>
-      </Pressable>
+      <View style={styles.actions}>
+        <Pressable style={styles.pauseBtn} onPress={onTogglePause}>
+          <Text style={styles.pauseText}>{isPaused ? 'RESUME' : 'PAUSE'}</Text>
+        </Pressable>
+        <Pressable style={styles.stopBtn} onPress={onStop}>
+          <Text style={styles.stopText}>STOP</Text>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -82,6 +96,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pauseBtn: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  pauseText: {
+    color: theme.text,
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
   stopBtn: {
     backgroundColor: theme.accent,

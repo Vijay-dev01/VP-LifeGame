@@ -3,9 +3,11 @@ import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import { format } from 'date-fns';
 import { useStore, type Habit } from '@/store';
+import { PLAN_START_ACTION } from '@/hooks/useEngagementNotificationActions';
 
 const SMART_SOURCE = 'lifegame-smart';
 const CHANNEL_ID = 'habit-reminders';
+const PLAN_CATEGORY_ID = 'plan-morning-actions';
 
 let handlerConfigured = false;
 
@@ -85,6 +87,14 @@ async function ensureNotificationInfra(Notifications: ExpoNotifications) {
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }
+
+  await Notifications.setNotificationCategoryAsync(PLAN_CATEGORY_ID, [
+    {
+      identifier: PLAN_START_ACTION,
+      buttonTitle: 'Start',
+      options: { opensAppToForeground: true },
+    },
+  ]);
   return true;
 }
 
@@ -182,6 +192,7 @@ async function scheduleWeeklySummary(Notifications: ExpoNotifications) {
 export function useSmartNotifications() {
   const habits = useStore((s) => s.habits);
   const completions = useStore((s) => s.completions);
+  const dayPlans = useStore((s) => s.dayPlans);
   const notificationSettings = useStore((s) => s.notificationSettings);
   const notificationState = useStore((s) => s.notificationState);
   const markNotificationSent = useStore((s) => s.markNotificationSent);
@@ -286,13 +297,53 @@ export function useSmartNotifications() {
       if (notificationSettings.weeklySummaryEnabled) {
         await scheduleWeeklySummary(Notifications);
       }
+
+      await scheduleRecurringNotification(Notifications, {
+        hour: 21,
+        minute: 0,
+        title: 'Plan Tomorrow',
+        body: 'Ready to plan tomorrow?',
+        type: 'plan-evening',
+      });
+
+      await scheduleRecurringNotification(Notifications, {
+        hour: 21,
+        minute: 30,
+        title: 'Daily Reflection',
+        body: 'What distracted you today?',
+        type: 'reflection-evening',
+      });
+
+      const todayPlans = dayPlans[today] ?? [];
+      const firstPlan = todayPlans.find((p) => !p.done) ?? todayPlans[0];
+      const morningParsed = firstPlan ? parseTime(firstPlan.time) : null;
+      const morningHour = morningParsed?.hour ?? 8;
+      const morningMinute = morningParsed?.minute ?? 0;
+      const morningBody = firstPlan
+        ? `Ready? First task: ${firstPlan.title}`
+        : 'Ready? Start your first activity.';
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Good morning',
+          body: morningBody,
+          data: { source: SMART_SOURCE, type: 'plan-morning', planId: firstPlan?.id },
+          sound: false,
+          categoryIdentifier: PLAN_CATEGORY_ID,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: morningHour,
+          minute: morningMinute,
+        },
+      });
     };
 
     run().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [habits, notificationSettings, progress, todayDone]);
+  }, [habits, notificationSettings, progress, todayDone, dayPlans, today]);
 
   useEffect(() => {
     const prevDone = completedRef.current;

@@ -9,7 +9,9 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useMonthlyLifecycle } from '@/hooks/useMonthlyLifecycle';
 import { useLifeLogTimerSync } from '@/hooks/useLifeLogTimerSync';
+import { useLifeLogNotificationActions } from '@/hooks/useLifeLogNotificationActions';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
+import { useEngagementNotificationActions } from '@/hooks/useEngagementNotificationActions';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -52,6 +54,8 @@ function RootLayoutNav() {
   useMonthlyLifecycle();
   useSmartNotifications();
   useLifeLogTimerSync();
+  useLifeLogNotificationActions();
+  useEngagementNotificationActions();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

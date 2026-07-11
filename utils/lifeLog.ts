@@ -1,5 +1,5 @@
 import { format, isThisMonth, isThisWeek, parseISO } from 'date-fns';
-import type { LifeLog, LifeLogMood } from '@/store';
+import type { ActiveTimer, LifeLog, LifeLogMood } from '@/store';
 import { getCategoryById } from '@/constants/lifeLogCategories';
 
 export function calcDurationMinutes(start: string, end: string): number {
@@ -19,8 +19,26 @@ export function formatDurationHours(minutes: number): string {
   return hours % 1 === 0 ? `${hours}h` : `${hours.toFixed(1)}h`;
 }
 
-export function getTimerElapsedSeconds(startTime: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000));
+export function getTimerElapsedSeconds(
+  timerOrStartTime: ActiveTimer | string
+): number {
+  if (typeof timerOrStartTime === 'string') {
+    return Math.max(
+      0,
+      Math.floor((Date.now() - new Date(timerOrStartTime).getTime()) / 1000)
+    );
+  }
+  const timer = timerOrStartTime;
+  const accumulated = timer.accumulatedSeconds ?? 0;
+  if (timer.pausedAt) {
+    return accumulated;
+  }
+  const runningMs = Date.now() - new Date(timer.startTime).getTime();
+  return Math.max(0, accumulated + Math.floor(runningMs / 1000));
+}
+
+export function isTimerPaused(timer: ActiveTimer): boolean {
+  return !!timer.pausedAt;
 }
 
 export function formatTimerElapsed(seconds: number): string {
