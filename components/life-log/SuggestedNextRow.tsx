@@ -12,14 +12,20 @@ interface SuggestedNextRowProps {
   suggestions: ActivityChip[];
   onSelect: (category: string, title: string) => void;
   disabled?: boolean;
+  title?: string;
 }
 
-export function SuggestedNextRow({ suggestions, onSelect, disabled }: SuggestedNextRowProps) {
+export function SuggestedNextRow({
+  suggestions,
+  onSelect,
+  disabled,
+  title = 'SUGGESTED NEXT',
+}: SuggestedNextRowProps) {
   if (suggestions.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>SUGGESTED NEXT</Text>
+      <Text style={styles.title}>{title}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {suggestions.map((s, i) => {
           const cat = getCategoryById(s.category);

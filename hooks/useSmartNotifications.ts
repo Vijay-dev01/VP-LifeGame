@@ -321,13 +321,18 @@ export function useSmartNotifications() {
       const morningMinute = morningParsed?.minute ?? 0;
       const morningBody = firstPlan
         ? `Ready? First task: ${firstPlan.title}`
-        : 'Ready? Start your first activity.';
+        : 'No plan yet — tap to plan your day';
 
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Good morning',
           body: morningBody,
-          data: { source: SMART_SOURCE, type: 'plan-morning', planId: firstPlan?.id },
+          data: {
+            source: SMART_SOURCE,
+            type: 'plan-morning',
+            planId: firstPlan?.id,
+            openPlan: !firstPlan,
+          },
           sound: false,
           categoryIdentifier: PLAN_CATEGORY_ID,
         },

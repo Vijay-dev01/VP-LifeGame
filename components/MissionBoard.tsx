@@ -10,10 +10,10 @@ import {
   Animated,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { eachDayOfInterval, endOfMonth, format, startOfMonth } from 'date-fns';
+import { eachDayOfInterval, endOfMonth, format, parse, startOfMonth } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
-import type { DayTask } from '@/store';
+import type { DayPlanItem, DayTask } from '@/store';
 
 const CARD_W = 280;
 const CARD_GAP = 12;
@@ -28,6 +28,15 @@ function progressColor(percent: number) {
   if (percent >= 100) return '#16a34a';
   if (percent >= 50) return '#f59e0b';
   return '#dc2626';
+}
+
+function formatPlanTime(time: string): string {
+  try {
+    const d = parse(time, 'HH:mm', new Date());
+    return format(d, 'h:mm a');
+  } catch {
+    return time;
+  }
 }
 
 function ProgressRing({ percent }: { percent: number }) {
@@ -78,12 +87,14 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-export function MissionBoard({ onPlanTomorrow }: { onPlanTomorrow?: () => void }) {
+export function MissionBoard() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const dayTasks = useStore((s) => s.dayTasks);
+  const dayPlans = useStore((s) => s.dayPlans);
   const addTask = useStore((s) => s.addTask);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteTask = useStore((s) => s.deleteTask);
+  const togglePlanItemDone = useStore((s) => s.togglePlanItemDone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [newTitle, setNewTitle] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -132,27 +143,31 @@ export function MissionBoard({ onPlanTomorrow }: { onPlanTomorrow?: () => void }
     () =>
       missionDays.map((dateObj) => {
         const dateKey = format(dateObj, 'yyyy-MM-dd');
+        const scheduled = [...(dayPlans[dateKey] ?? [])].sort((a, b) =>
+          a.time.localeCompare(b.time)
+        );
         const tasks = [...(dayTasks[dateKey] ?? [])].sort((a, b) => a.order - b.order);
-        const done = tasks.filter((t) => t.done).length;
-        const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+        const scheduledDone = scheduled.filter((p) => p.done).length;
+        const tasksDone = tasks.filter((t) => t.done).length;
+        const total = scheduled.length + tasks.length;
+        const done = scheduledDone + tasksDone;
+        const pct = total ? Math.round((done / total) * 100) : 0;
         return {
           dateObj,
           dateKey,
+          scheduled,
           tasks,
           percent: pct,
         };
       }),
-    [dayTasks, missionDays]
+    [dayTasks, dayPlans, missionDays]
   );
 
   return (
     <View>
-      {onPlanTomorrow ? (
-        <Pressable style={styles.planBtn} onPress={onPlanTomorrow}>
-          <Text style={styles.planBtnText}>Plan Tomorrow</Text>
-        </Pressable>
-      ) : null}
-      <Text style={styles.helperText}>Tap a day card to set where new tasks will be added.</Text>
+      <Text style={styles.helperText}>
+        Scheduled items come from Plan Tomorrow. Add extra errands below.
+      </Text>
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -179,8 +194,9 @@ export function MissionBoard({ onPlanTomorrow }: { onPlanTomorrow?: () => void }
           scrollToToday();
         }}
       >
-        {cardData.map(({ dateObj, dateKey, tasks, percent }) => {
+        {cardData.map(({ dateObj, dateKey, scheduled, tasks, percent }) => {
           const selected = dateKey === selectedDate;
+          const hasItems = scheduled.length > 0 || tasks.length > 0;
           return (
             <Pressable
               key={dateKey}
@@ -196,32 +212,56 @@ export function MissionBoard({ onPlanTomorrow }: { onPlanTomorrow?: () => void }
 
               <Text style={styles.tasksHeading}>Tasks</Text>
               <View style={styles.tasksList}>
-                {tasks.length === 0 ? (
+                {!hasItems ? (
                   <Text style={styles.empty}>No tasks</Text>
                 ) : (
-                  tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleTask(task.id)}
-                      onDelete={() =>
-                        Alert.alert('Delete task', `Remove "${task.title}"?`, [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Delete',
-                            style: 'destructive',
-                            onPress: () => deleteTask(task.id),
-                          },
-                        ])
-                      }
-                    />
-                  ))
+                  <>
+                    {scheduled.map((plan) => (
+                      <PlanRow
+                        key={plan.id}
+                        plan={plan}
+                        onToggle={() => togglePlanItemDone(dateKey, plan.id)}
+                      />
+                    ))}
+                    {tasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        onToggle={() => toggleTask(task.id)}
+                        onDelete={() =>
+                          Alert.alert('Delete task', `Remove "${task.title}"?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => deleteTask(task.id),
+                            },
+                          ])
+                        }
+                      />
+                    ))}
+                  </>
                 )}
               </View>
             </Pressable>
           );
         })}
       </ScrollView>
+    </View>
+  );
+}
+
+function PlanRow({ plan, onToggle }: { plan: DayPlanItem; onToggle: () => void }) {
+  return (
+    <View style={styles.taskRow}>
+      <Pressable style={[styles.check, plan.done && styles.checkChecked]} onPress={onToggle}>
+        {plan.done && <Text style={styles.checkMark}>✓</Text>}
+      </Pressable>
+      <View style={styles.taskTitleWrap}>
+        <Text style={[styles.taskTitle, plan.done && styles.taskDone]} numberOfLines={1}>
+          {formatPlanTime(plan.time)} · {plan.title}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -269,20 +309,6 @@ function TaskRow({
 }
 
 const styles = StyleSheet.create({
-  planBtn: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  planBtnText: {
-    fontWeight: '800',
-    color: theme.text,
-    fontSize: 13,
-  },
   helperText: {
     color: theme.textMuted,
     fontSize: 12,

@@ -34,6 +34,8 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
   const [time, setTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  const tomorrowLabel = format(addDays(new Date(), 1), 'EEEE');
+
   const handleAdd = () => {
     if (!title.trim()) return;
     addPlanItem(tomorrow, {
@@ -50,6 +52,13 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.heading}>Plan Tomorrow</Text>
           <Text style={styles.dateLabel}>{format(addDays(new Date(), 1), 'EEEE, MMM d')}</Text>
+
+          {items.length > 0 ? (
+            <Text style={styles.savedHint}>
+              {items.length} {items.length === 1 ? 'activity' : 'activities'} planned for{' '}
+              {tomorrowLabel}
+            </Text>
+          ) : null}
 
           <View style={styles.goalRow}>
             <Text style={styles.goalLabel}>Goal: Reach {dailyGoalScore} Score</Text>
@@ -149,6 +158,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textMuted,
     marginBottom: 14,
+  },
+  savedHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.accent,
+    marginBottom: 10,
   },
   goalRow: {
     flexDirection: 'row',

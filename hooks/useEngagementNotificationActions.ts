@@ -46,6 +46,17 @@ export function useEngagementNotificationActions() {
           return;
         }
 
+        if (type === 'plan-morning' && (data?.openPlan || actionId === Notifications.DEFAULT_ACTION_IDENTIFIER)) {
+          const today = format(new Date(), 'yyyy-MM-dd');
+          const plans = useStore.getState().getPlanForDate(today);
+          if (!plans.length || data?.openPlan) {
+            Linking.openURL('vprime://life-log?action=plan').catch(() => {});
+            return;
+          }
+          Linking.openURL('vprime://life-log').catch(() => {});
+          return;
+        }
+
         if (type === 'reflection-evening') {
           Linking.openURL('vprime://life-log').catch(() => {});
         }

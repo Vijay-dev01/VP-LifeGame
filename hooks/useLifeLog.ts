@@ -81,6 +81,7 @@ function groupLogs(logs: LifeLog[]): GroupedLifeLogs {
 export function useLifeLog() {
   const logs = useStore((s) => s.lifeLogs);
   const recentActivityKeys = useStore((s) => s.recentActivityKeys);
+  const dayPlans = useStore((s) => s.dayPlans);
   const addLifeLog = useStore((s) => s.addLifeLog);
   const updateLifeLog = useStore((s) => s.updateLifeLog);
   const deleteLifeLog = useStore((s) => s.deleteLifeLog);
@@ -115,13 +116,29 @@ export function useLifeLog() {
     [recentActivityKeys]
   );
 
-  const suggestedNext = useMemo(() => {
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const { suggestedNext, suggestionsFromPlan } = useMemo(() => {
+    const todayPlans = (dayPlans[today] ?? []).filter((p) => !p.done);
+    if (todayPlans.length) {
+      return {
+        suggestedNext: todayPlans.slice(0, 3).map((p) => ({
+          category: p.category,
+          title: p.title,
+        })),
+        suggestionsFromPlan: true,
+      };
+    }
+
     const lastLog = sortedLogs[0];
     if (!lastLog) {
-      return [
-        { category: 'deep-work', title: 'coding' },
-        { category: 'health', title: 'walking' },
-      ];
+      return {
+        suggestedNext: [
+          { category: 'deep-work', title: 'coding' },
+          { category: 'health', title: 'walking' },
+        ],
+        suggestionsFromPlan: false,
+      };
     }
     const ruleCats = SUGGESTION_RULES[lastLog.category] ?? ['deep-work', 'health'];
     const fromHistory = sortedLogs
@@ -129,13 +146,18 @@ export function useLifeLog() {
       .slice(0, 3)
       .map((l) => ({ category: l.category, title: l.title }));
 
-    if (fromHistory.length >= 2) return fromHistory.slice(0, 3);
+    if (fromHistory.length >= 2) {
+      return { suggestedNext: fromHistory.slice(0, 3), suggestionsFromPlan: false };
+    }
 
-    return ruleCats.slice(0, 3).map((cat) => ({
-      category: cat,
-      title: getCategoryById(cat)?.examples[0] ?? cat,
-    }));
-  }, [sortedLogs]);
+    return {
+      suggestedNext: ruleCats.slice(0, 3).map((cat) => ({
+        category: cat,
+        title: getCategoryById(cat)?.examples[0] ?? cat,
+      })),
+      suggestionsFromPlan: false,
+    };
+  }, [sortedLogs, dayPlans, today]);
 
   const updateFilter = useCallback(
     <K extends keyof LifeLogFilters>(key: K, value: LifeLogFilters[K]) => {
@@ -163,6 +185,7 @@ export function useLifeLog() {
     dayTotals,
     recentActivities,
     suggestedNext,
+    suggestionsFromPlan,
     filters,
     updateFilter,
     clearFilters,

@@ -171,6 +171,7 @@ interface AppState {
   getPlanForDate: (date: string) => DayPlanItem[];
   setDailyGoalScore: (score: number) => void;
   markPlanItemDone: (date: string, id: string) => void;
+  togglePlanItemDone: (date: string, id: string) => void;
   addReflection: (reflection: Omit<NightlyReflection, 'date'> & { date?: string }) => void;
   getReflectionForDate: (date: string) => NightlyReflection | undefined;
   setAiSettings: (settings: Partial<AiSettings>) => void;
@@ -625,6 +626,17 @@ export const useStore = create<AppState>()(
             ...s.dayPlans,
             [date]: (s.dayPlans[date] ?? []).map((p) =>
               p.id === id ? { ...p, done: true } : p
+            ),
+          },
+        }));
+      },
+
+      togglePlanItemDone: (date, id) => {
+        set((s) => ({
+          dayPlans: {
+            ...s.dayPlans,
+            [date]: (s.dayPlans[date] ?? []).map((p) =>
+              p.id === id ? { ...p, done: !p.done } : p
             ),
           },
         }));

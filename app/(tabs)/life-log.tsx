@@ -15,6 +15,7 @@ import { RecentActivitiesRow } from '@/components/life-log/RecentActivitiesRow';
 import { StopTimerModal } from '@/components/life-log/StopTimerModal';
 import { SuggestedNextRow } from '@/components/life-log/SuggestedNextRow';
 import { TimeSummary } from '@/components/life-log/TimeSummary';
+import { TodayScheduleRow } from '@/components/life-log/TodayScheduleRow';
 import { PlanTomorrowSheet } from '@/components/plan/PlanTomorrowSheet';
 import { NightlyReflectionModal } from '@/components/reflection/NightlyReflectionModal';
 import { getPostStopSuggestions } from '@/constants/contextSuggestions';
@@ -41,6 +42,7 @@ export default function LifeLogScreen() {
     dayTotals,
     recentActivities,
     suggestedNext,
+    suggestionsFromPlan,
     filters,
     updateFilter,
     clearFilters,
@@ -128,6 +130,12 @@ export default function LifeLogScreen() {
             activeTitle={activeTimer?.title}
           />
 
+          <TodayScheduleRow
+            onStart={handleResume}
+            onPlanPress={() => setShowPlan(true)}
+            disabled={isRunning}
+          />
+
           {isRunning && activeTimer ? (
             <ActiveTimerBar
               categoryId={activeTimer.category}
@@ -162,6 +170,7 @@ export default function LifeLogScreen() {
             suggestions={suggestedNext}
             onSelect={handleResume}
             disabled={isRunning}
+            title={suggestionsFromPlan ? 'UP NEXT FROM YOUR PLAN' : 'SUGGESTED NEXT'}
           />
 
           <LifeLogFiltersBar filters={filters} onUpdate={updateFilter} onClear={clearFilters} />
