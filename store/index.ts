@@ -103,6 +103,12 @@ export interface ForgotToStopState {
   thresholdHours: number;
 }
 
+export interface BuddySettings {
+  enabled: boolean;
+  userName: string;
+  lockScreenListen: boolean;
+}
+
 export type LifeLogInput = Omit<LifeLog, 'id' | 'duration' | 'createdAt'> & {
   duration?: number;
 };
@@ -127,6 +133,7 @@ interface AppState {
   reflections: NightlyReflection[];
   aiSettings: AiSettings;
   forgotToStopState: ForgotToStopState;
+  buddySettings: BuddySettings;
   pendingStopFromNotification: boolean;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
@@ -140,6 +147,10 @@ interface AppState {
   deleteTask: (id: string) => void;
   toggleTask: (id: string) => void;
   getTasksForDate: (date: string) => DayTask[];
+  findTaskByTitle: (date: string, query: string) => DayTask | undefined;
+  addTasksBulk: (date: string, titles: string[]) => number;
+  completeTaskByTitle: (query: string) => { found: boolean; title: string | null; date: string | null };
+  setBuddySettings: (settings: Partial<BuddySettings>) => void;
   addLifeLog: (entry: LifeLogInput) => string | null;
   updateLifeLog: (id: string, patch: Partial<LifeLogInput>) => boolean;
   deleteLifeLog: (id: string) => void;
@@ -313,6 +324,7 @@ export const useStore = create<AppState>()(
       reflections: [],
       aiSettings: { enabled: false, apiKey: '' },
       forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
+      buddySettings: { enabled: false, userName: 'Vijay', lockScreenListen: false },
       pendingStopFromNotification: false,
 
       addHabit: (habit) => {
@@ -412,6 +424,46 @@ export const useStore = create<AppState>()(
       },
 
       getTasksForDate: (date) => get().dayTasks[date] ?? [],
+
+      findTaskByTitle: (date, query) => {
+        const q = query.toLowerCase().trim();
+        if (!q) return undefined;
+        const tasks = get().dayTasks[date] ?? [];
+        return (
+          tasks.find((t) => t.title.toLowerCase() === q) ??
+          tasks.find((t) => t.title.toLowerCase().includes(q)) ??
+          tasks.find((t) => q.includes(t.title.toLowerCase()))
+        );
+      },
+
+      addTasksBulk: (date, titles) => {
+        let added = 0;
+        for (const title of titles) {
+          const t = title.trim();
+          if (!t) continue;
+          get().addTask(date, t);
+          added++;
+        }
+        return added;
+      },
+
+      completeTaskByTitle: (query) => {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+        for (const date of [today, tomorrow]) {
+          const task = get().findTaskByTitle(date, query);
+          if (task && !task.done) {
+            get().toggleTask(task.id);
+            return { found: true, title: task.title, date };
+          }
+        }
+        return { found: false, title: null, date: null };
+      },
+
+      setBuddySettings: (settings) =>
+        set((s) => ({
+          buddySettings: { ...s.buddySettings, ...settings },
+        })),
 
       addLifeLog: (entry) => {
         const err = validateLifeLogTimes(entry.startTime, entry.endTime);
@@ -727,6 +779,7 @@ export const useStore = create<AppState>()(
           reflections: [],
           aiSettings: { enabled: false, apiKey: '' },
           forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
+          buddySettings: { enabled: false, userName: 'Vijay', lockScreenListen: false },
           pendingStopFromNotification: false,
           notificationState: {
             date: '',
@@ -829,6 +882,7 @@ export const useStore = create<AppState>()(
         reflections: s.reflections,
         aiSettings: s.aiSettings,
         forgotToStopState: s.forgotToStopState,
+        buddySettings: s.buddySettings,
       }),
     }
   )

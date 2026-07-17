@@ -12,6 +12,9 @@ import { useLifeLogTimerSync } from '@/hooks/useLifeLogTimerSync';
 import { useLifeLogNotificationActions } from '@/hooks/useLifeLogNotificationActions';
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 import { useEngagementNotificationActions } from '@/hooks/useEngagementNotificationActions';
+import { View } from 'react-native';
+import { BuddyOverlay } from '@/components/buddy/BuddyOverlay';
+import { BuddyProvider } from '@/hooks/useBuddyAssistant';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -58,13 +61,18 @@ function RootLayoutNav() {
   useEngagementNotificationActions();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style="light" />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="life-log" options={{ headerShown: false, presentation: 'modal' }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <BuddyProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <StatusBar style="light" />
+        <View style={{ flex: 1 }}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="life-log" options={{ headerShown: false, presentation: 'modal' }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+          </Stack>
+          <BuddyOverlay />
+        </View>
+      </ThemeProvider>
+    </BuddyProvider>
   );
 }

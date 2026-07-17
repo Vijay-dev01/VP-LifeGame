@@ -40,15 +40,22 @@
           }
         }
       ],
-    "expo-notifications",
-    "expo-web-browser",
-    "@react-native-community/datetimepicker",
-    [
-      "expo-speech-recognition",
-      {
-        "microphonePermission": "Allow VPRIME to use the microphone for voice logging."
-      }
-    ]
+      "expo-notifications",
+      "expo-web-browser",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "VPRIME uses the microphone for Hey Buddy voice commands and voice logging."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "VPRIME uses the microphone for Hey Buddy voice commands.",
+          "enableBackgroundRecording": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

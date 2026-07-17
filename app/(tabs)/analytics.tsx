@@ -5,6 +5,7 @@ import { Header } from '@/components/Header';
 import { ConsistencyChart } from '@/components/ConsistencyChart';
 import { HabitBreakdown } from '@/components/HabitBreakdown';
 import { LifeAnalytics } from '@/components/life-log/LifeAnalytics';
+import { BuddySettingsCard } from '@/components/buddy/BuddySettingsCard';
 import { theme } from '@/constants/theme';
 import { useStore } from '@/store';
 import { emailMonthlyPdf, shareMonthlyPdf } from '@/utils/monthlyReport';
@@ -63,6 +64,7 @@ export default function AnalyticsScreen() {
 
         <ConsistencyChart />
         <HabitBreakdown />
+        <BuddySettingsCard />
         <View style={styles.aiCard}>
           <Text style={styles.aiTitle}>AI Insights (optional)</Text>
           <Pressable
