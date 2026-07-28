@@ -6,6 +6,7 @@ import { StatsCards } from '@/components/StatsCards';
 import { HabitGrid } from '@/components/HabitGrid';
 import { AddHabitModal } from '@/components/AddHabitModal';
 import { XPBadge } from '@/components/XPBadge';
+import { GoalFocusWidget } from '@/components/goals/GoalFocusWidget';
 import { theme } from '@/constants/theme';
 import { useStore } from '@/store';
 
@@ -20,6 +21,7 @@ export default function DashboardScreen() {
       <Header />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <XPBadge />
+        <GoalFocusWidget />
         <View style={styles.topRow}>
           <View style={styles.notificationInline}>
             <Text style={styles.notificationLabel}>Notifications</Text>

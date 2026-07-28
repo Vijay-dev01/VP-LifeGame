@@ -91,6 +91,7 @@ export function MissionBoard() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const dayTasks = useStore((s) => s.dayTasks);
   const dayPlans = useStore((s) => s.dayPlans);
+  const lifeGoals = useStore((s) => s.lifeGoals);
   const addTask = useStore((s) => s.addTask);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteTask = useStore((s) => s.deleteTask);
@@ -227,6 +228,11 @@ export function MissionBoard() {
                       <TaskRow
                         key={task.id}
                         task={task}
+                        goalEmoji={
+                          task.goalId
+                            ? lifeGoals.find((g) => g.id === task.goalId)?.emoji
+                            : undefined
+                        }
                         onToggle={() => toggleTask(task.id)}
                         onDelete={() =>
                           Alert.alert('Delete task', `Remove "${task.title}"?`, [
@@ -268,10 +274,12 @@ function PlanRow({ plan, onToggle }: { plan: DayPlanItem; onToggle: () => void }
 
 function TaskRow({
   task,
+  goalEmoji,
   onToggle,
   onDelete,
 }: {
   task: DayTask;
+  goalEmoji?: string;
   onToggle: () => void;
   onDelete: () => void;
 }) {
@@ -288,8 +296,9 @@ function TaskRow({
         {task.done && <Text style={styles.checkMark}>✓</Text>}
       </Pressable>
       <Pressable style={styles.taskTitleWrap} onLongPress={showFullTitle} delayLongPress={400}>
+        {goalEmoji ? <Text style={styles.goalBadge}>{goalEmoji}</Text> : null}
         <Text
-          style={[styles.taskTitle, task.done && styles.taskDone]}
+          style={[styles.taskTitle, task.done && styles.taskDone, goalEmoji && styles.taskTitleWithBadge]}
           numberOfLines={1}
           ellipsizeMode="tail"
           onTextLayout={(e) => {
@@ -443,7 +452,16 @@ const styles = StyleSheet.create({
   },
   taskTitleWrap: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     justifyContent: 'center',
+  },
+  goalBadge: {
+    fontSize: 14,
+  },
+  taskTitleWithBadge: {
+    flex: 1,
   },
   taskTitle: {
     fontSize: 14,

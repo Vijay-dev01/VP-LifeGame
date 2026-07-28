@@ -30,3 +30,13 @@ export function calcActivityXp(category: string, title: string): number {
 }
 
 export const HABIT_XP_BONUS = 10;
+
+export const GOAL_XP = {
+  DAILY_ACTION_COMPLETE: 15,
+  WEEKLY_TARGET_HIT: 75,
+  MANUAL_PROGRESS: 5,
+  MILESTONE_25: 50,
+  MILESTONE_50: 100,
+  MILESTONE_75: 150,
+  GOAL_COMPLETE: 500,
+} as const;

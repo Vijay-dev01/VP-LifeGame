@@ -193,6 +193,9 @@ export function useSmartNotifications() {
   const habits = useStore((s) => s.habits);
   const completions = useStore((s) => s.completions);
   const dayPlans = useStore((s) => s.dayPlans);
+  const activeGoalCount = useStore(
+    (s) => s.lifeGoals.filter((g) => g.status === 'active').length
+  );
   const notificationSettings = useStore((s) => s.notificationSettings);
   const notificationState = useStore((s) => s.notificationState);
   const markNotificationSent = useStore((s) => s.markNotificationSent);
@@ -299,6 +302,33 @@ export function useSmartNotifications() {
       }
 
       await scheduleRecurringNotification(Notifications, {
+        hour: 10,
+        minute: 0,
+        title: 'Life Goals',
+        body:
+          activeGoalCount > 0
+            ? (() => {
+                const today = format(new Date(), 'yyyy-MM-dd');
+                const action = useStore
+                  .getState()
+                  .goalDailyActions.find(
+                    (a) =>
+                      a.date === today &&
+                      !a.done &&
+                      useStore.getState().lifeGoals.some(
+                        (g) => g.id === a.goalId && g.status === 'active'
+                      )
+                  );
+                return (
+                  action?.title ??
+                  `${activeGoalCount} active goal${activeGoalCount > 1 ? 's' : ''} — check in`
+                );
+              })()
+            : 'Set a life goal and turn ambition into daily action',
+        type: 'goal-daily-action',
+      });
+
+      await scheduleRecurringNotification(Notifications, {
         hour: 21,
         minute: 0,
         title: 'Plan Tomorrow',
@@ -348,7 +378,7 @@ export function useSmartNotifications() {
     return () => {
       cancelled = true;
     };
-  }, [habits, notificationSettings, progress, todayDone, dayPlans, today]);
+  }, [habits, notificationSettings, progress, todayDone, dayPlans, today, activeGoalCount]);
 
   useEffect(() => {
     const prevDone = completedRef.current;
