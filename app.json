@@ -17,7 +17,7 @@
       "bundleIdentifier": "com.vprime.app"
     },
     "android": {
-      "package": "com.vprime.app",
+      "package": "com.vprime.app.beta",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./VP.png"
