@@ -1,39 +1,24 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { TogglePill } from '@/components/ui/TogglePill';
 import { theme } from '@/constants/theme';
-import { useBuddyLockScreenStatusLabel } from '@/hooks/useBuddyLockScreenStatusLabel';
+import { useBuddyOptional } from '@/hooks/useBuddyAssistant';
 import { useStore } from '@/store';
-
-function Toggle({
-  on,
-  onPress,
-  disabled,
-}: {
-  on: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      style={[styles.toggle, on && styles.toggleOn, disabled && styles.toggleDisabled]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={styles.toggleText}>{on ? 'ON' : 'OFF'}</Text>
-    </Pressable>
-  );
-}
 
 export function BuddySettingsCard() {
   const buddySettings = useStore((s) => s.buddySettings);
   const setBuddySettings = useStore((s) => s.setBuddySettings);
-  const lockScreenStatusLabel = useBuddyLockScreenStatusLabel();
+  const buddy = useBuddyOptional();
+  const lockScreenStatusLabel =
+    buddy?.lockScreenStatusLabel && buddy.lockScreenStatus !== 'off'
+      ? buddy.lockScreenStatusLabel
+      : null;
 
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
         <Text style={styles.title}>Hey Buddy</Text>
-        <Toggle
+        <TogglePill
           on={buddySettings.enabled}
           onPress={() => setBuddySettings({ enabled: !buddySettings.enabled })}
         />
@@ -56,7 +41,7 @@ export function BuddySettingsCard() {
             <>
               <View style={styles.row}>
                 <Text style={styles.label}>Lock screen</Text>
-                <Toggle
+                <TogglePill
                   on={buddySettings.lockScreenListen}
                   onPress={() =>
                     setBuddySettings({ lockScreenListen: !buddySettings.lockScreenListen })
@@ -118,25 +103,6 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 13,
     textAlign: 'right',
-  },
-  toggle: {
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  toggleOn: {
-    borderColor: theme.accent,
-    backgroundColor: 'rgba(220,38,38,0.1)',
-  },
-  toggleDisabled: {
-    opacity: 0.45,
-  },
-  toggleText: {
-    fontWeight: '700',
-    color: theme.text,
-    fontSize: 12,
   },
   lockStatus: {
     fontSize: 11,

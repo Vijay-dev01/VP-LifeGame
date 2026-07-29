@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
-import { isRunningInExpoGo } from 'expo';
 import type { ActiveTimer } from '@/store';
+import { getNotificationsModule } from '@/hooks/notifications/shared';
 import { formatTimerElapsed, getTimerElapsedSeconds, isTimerPaused } from '@/utils/lifeLog';
 
 export const TIMER_NOTIFICATION_ID = 'lifelog-active-timer';
@@ -13,22 +13,7 @@ const CHANNEL_ID = 'life-log-timer';
 
 type ExpoNotifications = typeof import('expo-notifications');
 
-function shouldSkipNotificationsModule(): boolean {
-  if (Platform.OS === 'web') return true;
-  if (Platform.OS === 'android' && isRunningInExpoGo()) return true;
-  return false;
-}
-
-let notificationsImportPromise: Promise<ExpoNotifications | null> | null = null;
 let categoriesConfigured = false;
-
-async function getNotificationsModule(): Promise<ExpoNotifications | null> {
-  if (shouldSkipNotificationsModule()) return null;
-  if (!notificationsImportPromise) {
-    notificationsImportPromise = import('expo-notifications').then((m) => m);
-  }
-  return notificationsImportPromise;
-}
 
 async function ensureTimerChannel(Notifications: ExpoNotifications): Promise<boolean> {
   const perms = await Notifications.getPermissionsAsync();

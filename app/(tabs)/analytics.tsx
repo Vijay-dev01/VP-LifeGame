@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Header } from '@/components/Header';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { TabScreen } from '@/components/layout/TabScreen';
 import { ConsistencyChart } from '@/components/ConsistencyChart';
 import { HabitBreakdown } from '@/components/HabitBreakdown';
 import { LifeAnalytics } from '@/components/life-log/LifeAnalytics';
-import { BuddySettingsCard } from '@/components/buddy/BuddySettingsCard';
+import { SettingsSection } from '@/components/settings/SettingsSection';
 import { theme } from '@/constants/theme';
+import { useAiSettings } from '@/hooks/useAiSettings';
 import { useStore } from '@/store';
+import { clearSecureApiKey } from '@/utils/secureAiKey';
 import { emailMonthlyPdf, shareMonthlyPdf } from '@/utils/monthlyReport';
 import { format } from 'date-fns';
 
@@ -15,8 +16,7 @@ export default function AnalyticsScreen() {
   const currentMonth = useStore((s) => s.currentMonth);
   const reportRecipient = useStore((s) => s.reportRecipient);
   const resetAllData = useStore((s) => s.resetAllData);
-  const aiSettings = useStore((s) => s.aiSettings);
-  const setAiSettings = useStore((s) => s.setAiSettings);
+  const { enabled: aiEnabled, apiKey, setApiKey, toggleEnabled } = useAiSettings();
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
@@ -41,52 +41,41 @@ export default function AnalyticsScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert('Reset data?', 'This clears habits, completions, mission tasks, and life logs.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        style: 'destructive',
-        onPress: () => {
-          resetAllData();
-          setReportModalOpen(false);
+    Alert.alert(
+      'Reset all data?',
+      'This permanently clears habits, missions, life logs, goals, XP, reflections, plans, buddy settings, and AI preferences.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            resetAllData();
+            await clearSecureApiKey();
+            setReportModalOpen(false);
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <>
+      <TabScreen scrollProps={{ contentContainerStyle: styles.content }}>
         <Pressable onPress={() => setReportModalOpen(true)} style={styles.reportBtn}>
           <Text style={styles.reportBtnText}>REPORT (PDF / EMAIL / RESET)</Text>
         </Pressable>
 
         <ConsistencyChart />
         <HabitBreakdown />
-        <BuddySettingsCard />
-        <View style={styles.aiCard}>
-          <Text style={styles.aiTitle}>AI Insights (optional)</Text>
-          <Pressable
-            style={[styles.aiToggle, aiSettings.enabled && styles.aiToggleOn]}
-            onPress={() => setAiSettings({ enabled: !aiSettings.enabled })}
-          >
-            <Text style={styles.aiToggleText}>{aiSettings.enabled ? 'ON' : 'OFF'}</Text>
-          </Pressable>
-          {aiSettings.enabled ? (
-            <TextInput
-              style={styles.aiInput}
-              value={aiSettings.apiKey}
-              onChangeText={(apiKey) => setAiSettings({ apiKey })}
-              placeholder="OpenAI API key"
-              placeholderTextColor={theme.textMuted}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-          ) : null}
-        </View>
+        <SettingsSection
+          aiEnabled={aiEnabled}
+          onAiToggle={toggleEnabled}
+          apiKey={apiKey}
+          onApiKeyChange={(key) => void setApiKey(key)}
+        />
         <LifeAnalytics />
-      </ScrollView>
+      </TabScreen>
 
       <Modal
         visible={reportModalOpen}
@@ -106,7 +95,7 @@ export default function AnalyticsScreen() {
             <Text style={styles.modalSubtitle}>{monthLabel}</Text>
 
             <Pressable onPress={handleReset} style={[styles.modalBtn, styles.modalBtnDanger]}>
-              <Text style={[styles.modalBtnText, styles.modalBtnTextDanger]}>Reset Monthly Data</Text>
+              <Text style={[styles.modalBtnText, styles.modalBtnTextDanger]}>Reset All Data</Text>
             </Pressable>
 
             <Pressable onPress={handleEmail} style={styles.modalBtn}>
@@ -119,18 +108,11 @@ export default function AnalyticsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.bg,
-  },
-  scroll: {
-    flex: 1,
-  },
   content: {
     padding: 6,
   },
@@ -214,49 +196,5 @@ const styles = StyleSheet.create({
   },
   modalBtnTextDanger: {
     color: theme.accent,
-  },
-  aiCard: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 10,
-  },
-  aiTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: theme.textMuted,
-    flex: 1,
-  },
-  aiToggle: {
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  aiToggleOn: {
-    borderColor: theme.accent,
-    backgroundColor: 'rgba(220,38,38,0.1)',
-  },
-  aiToggleText: {
-    fontWeight: '700',
-    color: theme.text,
-    fontSize: 12,
-  },
-  aiInput: {
-    width: '100%',
-    backgroundColor: theme.surfaceLight,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    padding: 10,
-    color: theme.text,
-    fontSize: 12,
   },
 });

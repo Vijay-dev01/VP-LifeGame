@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { format, parseISO } from 'date-fns';
@@ -13,17 +13,16 @@ interface LifeLogCardProps {
   index?: number;
 }
 
-export function LifeLogCard({ log, index = 0 }: LifeLogCardProps) {
+export const LifeLogCard = memo(function LifeLogCard({ log, index = 0 }: LifeLogCardProps) {
   const timeLabel = format(parseISO(log.startTime), 'h:mm a');
+
+  const handlePress = useCallback(() => {
+    router.push({ pathname: '/life-log/edit/[id]', params: { id: log.id } });
+  }, [log.id]);
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(280)}>
-      <Pressable
-        style={styles.card}
-        onPress={() =>
-          router.push({ pathname: '/life-log/edit/[id]', params: { id: log.id } })
-        }
-      >
+      <Pressable style={styles.card} onPress={handlePress}>
         <View style={styles.timeCol}>
           <Text style={styles.time}>{timeLabel}</Text>
         </View>
@@ -50,7 +49,7 @@ export function LifeLogCard({ log, index = 0 }: LifeLogCardProps) {
       </Pressable>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

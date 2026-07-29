@@ -2,18 +2,13 @@ import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { format, addMonths, subMonths } from 'date-fns';
 import { useStore } from '@/store';
-import { computeMonthlyCompletionPercent } from '@/store';
+import { useMonthlyStats } from '@/hooks/useMonthlyStats';
 import { theme } from '@/constants/theme';
 
 export function Header() {
   const currentMonth = useStore((s) => s.currentMonth);
   const setCurrentMonth = useStore((s) => s.setCurrentMonth);
-  const habits = useStore((s) => s.habits);
-  const completions = useStore((s) => s.completions);
-  const percent = useMemo(
-    () => computeMonthlyCompletionPercent(habits, completions, currentMonth),
-    [habits, completions, currentMonth]
-  );
+  const { monthlyPercent: percent } = useMonthlyStats();
 
   const d = new Date(currentMonth + 'T12:00:00');
   const prev = () => setCurrentMonth(format(subMonths(d, 1), 'yyyy-MM-dd'));

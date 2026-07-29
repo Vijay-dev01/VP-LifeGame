@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -7,85 +7,19 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Animated,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { eachDayOfInterval, endOfMonth, format, parse, startOfMonth } from 'date-fns';
+import { eachDayOfInterval, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 import type { DayPlanItem, DayTask } from '@/store';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { formatPlanTime } from '@/utils/formatPlanTime';
 
 const CARD_W = 280;
 const CARD_GAP = 12;
 const CARD_STRIDE = CARD_W + CARD_GAP;
 const RING_SIZE = 116;
 const RING_STROKE = 12;
-const R = (RING_SIZE - RING_STROKE) / 2;
-const CIRC = 2 * Math.PI * R;
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-function progressColor(percent: number) {
-  if (percent >= 100) return '#16a34a';
-  if (percent >= 50) return '#f59e0b';
-  return '#dc2626';
-}
-
-function formatPlanTime(time: string): string {
-  try {
-    const d = parse(time, 'HH:mm', new Date());
-    return format(d, 'h:mm a');
-  } catch {
-    return time;
-  }
-}
-
-function ProgressRing({ percent }: { percent: number }) {
-  const animated = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(animated, {
-      toValue: percent,
-      duration: 450,
-      useNativeDriver: false,
-    }).start();
-  }, [percent, animated]);
-
-  const dashOffset = animated.interpolate({
-    inputRange: [0, 100],
-    outputRange: [CIRC, 0],
-    extrapolate: 'clamp',
-  });
-
-  const color = progressColor(percent);
-
-  return (
-    <View style={styles.ringWrap}>
-      <Svg width={RING_SIZE} height={RING_SIZE}>
-        <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={R}
-          stroke={theme.border}
-          strokeWidth={RING_STROKE}
-          fill="none"
-        />
-        <AnimatedCircle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={R}
-          stroke={color}
-          strokeWidth={RING_STROKE}
-          fill="none"
-          strokeDasharray={`${CIRC} ${CIRC}`}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-        />
-      </Svg>
-      <Text style={styles.ringText}>{percent}%</Text>
-    </View>
-  );
-}
 
 export function MissionBoard() {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -209,7 +143,14 @@ export function MissionBoard() {
                 <Text style={styles.dayDate}>{format(dateObj, 'dd.MM.yyyy')}</Text>
               </View>
 
-              <ProgressRing percent={percent} />
+              <View style={styles.ringSlot}>
+                <ProgressRing
+                  percent={percent}
+                  size={RING_SIZE}
+                  strokeWidth={RING_STROKE}
+                  showPercent
+                />
+              </View>
 
               <Text style={styles.tasksHeading}>Tasks</Text>
               <View style={styles.tasksList}>
@@ -218,14 +159,14 @@ export function MissionBoard() {
                 ) : (
                   <>
                     {scheduled.map((plan) => (
-                      <PlanRow
+                      <MemoPlanRow
                         key={plan.id}
                         plan={plan}
                         onToggle={() => togglePlanItemDone(dateKey, plan.id)}
                       />
                     ))}
                     {tasks.map((task) => (
-                      <TaskRow
+                      <MemoTaskRow
                         key={task.id}
                         task={task}
                         goalEmoji={
@@ -272,6 +213,8 @@ function PlanRow({ plan, onToggle }: { plan: DayPlanItem; onToggle: () => void }
   );
 }
 
+const MemoPlanRow = memo(PlanRow);
+
 function TaskRow({
   task,
   goalEmoji,
@@ -316,6 +259,8 @@ function TaskRow({
     </View>
   );
 }
+
+const MemoTaskRow = memo(TaskRow);
 
 const styles = StyleSheet.create({
   helperText: {
@@ -399,17 +344,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  ringWrap: {
+  ringSlot: {
     marginTop: 16,
     marginBottom: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringText: {
-    position: 'absolute',
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.text,
   },
   tasksHeading: {
     fontSize: 14,

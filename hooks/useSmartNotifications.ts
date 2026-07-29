@@ -1,34 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
-import { isRunningInExpoGo } from 'expo';
 import { format } from 'date-fns';
 import { useStore, type Habit } from '@/store';
 import { PLAN_START_ACTION } from '@/hooks/useEngagementNotificationActions';
+import {
+  getNotificationsModule,
+  SMART_NOTIFICATION_SOURCE,
+} from '@/hooks/notifications/shared';
 
-const SMART_SOURCE = 'lifegame-smart';
+const SMART_SOURCE = SMART_NOTIFICATION_SOURCE;
 const CHANNEL_ID = 'habit-reminders';
 const PLAN_CATEGORY_ID = 'plan-morning-actions';
 
 let handlerConfigured = false;
 
 type ExpoNotifications = typeof import('expo-notifications');
-
-/** SDK 53+: loading expo-notifications in Android Expo Go throws (push path). Local notifications need a dev build. */
-function shouldSkipNotificationsModule(): boolean {
-  if (Platform.OS === 'web') return true;
-  if (Platform.OS === 'android' && isRunningInExpoGo()) return true;
-  return false;
-}
-
-let notificationsImportPromise: Promise<ExpoNotifications | null> | null = null;
-
-async function getNotificationsModule(): Promise<ExpoNotifications | null> {
-  if (shouldSkipNotificationsModule()) return null;
-  if (!notificationsImportPromise) {
-    notificationsImportPromise = import('expo-notifications').then((m) => m);
-  }
-  return notificationsImportPromise;
-}
 
 type ReminderChoice = {
   habitId: string;

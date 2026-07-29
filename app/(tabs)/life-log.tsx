@@ -120,7 +120,6 @@ export default function LifeLogScreen() {
               <Text style={styles.planBtnText}>Plan Tomorrow</Text>
             </Pressable>
           </View>
-          <XPBadge />
 
           <TimeSummary
             todayLabel={todayLabel}

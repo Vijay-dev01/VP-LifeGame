@@ -489,12 +489,6 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
   return <BuddyContext.Provider value={value}>{children}</BuddyContext.Provider>;
 }
 
-export function useBuddy(): BuddyContextValue {
-  const ctx = useContext(BuddyContext);
-  if (!ctx) throw new Error('useBuddy must be used within BuddyProvider');
-  return ctx;
-}
-
 export function useBuddyOptional(): BuddyContextValue | null {
   return useContext(BuddyContext);
 }

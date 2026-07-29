@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addDays, format } from 'date-fns';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useStore } from '@/store';
 import { LIFE_LOG_CATEGORIES } from '@/constants/lifeLogCategories';
 import { theme } from '@/constants/theme';
@@ -47,9 +47,7 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheet}>
           <Text style={styles.heading}>Plan Tomorrow</Text>
           <Text style={styles.dateLabel}>{format(addDays(new Date(), 1), 'EEEE, MMM d')}</Text>
 
@@ -127,27 +125,14 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
           <Pressable style={styles.doneBtn} onPress={onClose}>
             <Text style={styles.doneText}>Done</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
-    backgroundColor: theme.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 20,
-    paddingBottom: 32,
-    maxHeight: '85%',
   },
   heading: {
     fontSize: 18,

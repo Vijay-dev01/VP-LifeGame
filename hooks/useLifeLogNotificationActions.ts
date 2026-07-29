@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import { isRunningInExpoGo } from 'expo';
 import * as Linking from 'expo-linking';
 import { useStore } from '@/store';
+import { shouldSkipNotificationHandlers } from '@/hooks/notifications/shared';
 import {
   updateLifeLogTimerNotification,
   TIMER_ACTION_PAUSE,
@@ -12,15 +11,9 @@ import {
 
 type ExpoNotifications = typeof import('expo-notifications');
 
-function shouldSkip(): boolean {
-  if (Platform.OS === 'web') return true;
-  if (Platform.OS === 'android' && isRunningInExpoGo()) return true;
-  return false;
-}
-
 export function useLifeLogNotificationActions() {
   useEffect(() => {
-    if (shouldSkip()) return;
+    if (shouldSkipNotificationHandlers()) return;
 
     let sub: { remove: () => void } | null = null;
 

@@ -13,6 +13,7 @@ import { useLifeLogNotificationActions } from '@/hooks/useLifeLogNotificationAct
 import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 import { useEngagementNotificationActions } from '@/hooks/useEngagementNotificationActions';
 import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BuddyOverlay } from '@/components/buddy/BuddyOverlay';
 import { BuddyProvider } from '@/hooks/useBuddyAssistant';
 
@@ -22,7 +23,6 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(tabs)',
 };
 
@@ -61,19 +61,20 @@ function RootLayoutNav() {
   useEngagementNotificationActions();
 
   return (
-    <BuddyProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style="light" />
-        <View style={{ flex: 1 }}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="goals" options={{ headerShown: false }} />
-            <Stack.Screen name="life-log" options={{ headerShown: false, presentation: 'modal' }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-          </Stack>
-          <BuddyOverlay />
-        </View>
-      </ThemeProvider>
-    </BuddyProvider>
+    <SafeAreaProvider>
+      <BuddyProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style="light" />
+          <View style={{ flex: 1 }}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="goals" options={{ headerShown: false }} />
+              <Stack.Screen name="life-log" options={{ headerShown: false, presentation: 'modal' }} />
+            </Stack>
+            <BuddyOverlay />
+          </View>
+        </ThemeProvider>
+      </BuddyProvider>
+    </SafeAreaProvider>
   );
 }

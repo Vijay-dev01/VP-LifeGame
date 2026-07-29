@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { getCategoryById } from '@/constants/lifeLogCategories';
 import { theme } from '@/constants/theme';
 import { useStore, type DayPlanItem } from '@/store';
+import { formatPlanTime } from '@/utils/formatPlanTime';
 
 interface TodayScheduleRowProps {
   onStart: (category: string, title: string) => void;
@@ -11,16 +12,7 @@ interface TodayScheduleRowProps {
   disabled?: boolean;
 }
 
-function formatPlanTime(time: string): string {
-  try {
-    const d = parse(time, 'HH:mm', new Date());
-    return format(d, 'h:mm a');
-  } catch {
-    return time;
-  }
-}
-
-function PlanItemRow({
+const PlanItemRow = memo(function PlanItemRow({
   item,
   disabled,
   onStart,
@@ -66,7 +58,7 @@ function PlanItemRow({
       </Pressable>
     </View>
   );
-}
+});
 
 export function TodayScheduleRow({ onStart, onPlanPress, disabled }: TodayScheduleRowProps) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -77,9 +69,12 @@ export function TodayScheduleRow({ onStart, onPlanPress, disabled }: TodaySchedu
   const items = dayPlans[today] ?? [];
   const doneCount = items.filter((p) => p.done).length;
 
-  const handleToggleDone = (id: string) => {
-    togglePlanItemDone(today, id);
-  };
+  const handleToggleDone = useCallback(
+    (id: string) => {
+      togglePlanItemDone(today, id);
+    },
+    [today, togglePlanItemDone]
+  );
 
   if (items.length === 0) {
     return (

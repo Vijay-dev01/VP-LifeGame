@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { GoalProgressRing } from '@/components/goals/GoalProgressRing';
@@ -12,15 +12,16 @@ interface GoalCardProps {
   meta: GoalMeta;
 }
 
-export function GoalCard({ meta }: GoalCardProps) {
+export const GoalCard = memo(function GoalCard({ meta }: GoalCardProps) {
   const { goal, progressPercent, paceStatus, paceHint, health, weeklyTarget, weekActual } =
     meta;
 
+  const handlePress = useCallback(() => {
+    router.push({ pathname: '/goals/[id]', params: { id: goal.id } });
+  }, [goal.id]);
+
   return (
-    <Pressable
-      style={styles.card}
-      onPress={() => router.push({ pathname: '/goals/[id]', params: { id: goal.id } })}
-    >
+    <Pressable style={styles.card} onPress={handlePress}>
       <View style={styles.header}>
         <Text style={styles.emoji}>{goal.emoji}</Text>
         <View style={styles.titleWrap}>
@@ -52,7 +53,7 @@ export function GoalCard({ meta }: GoalCardProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 export function GoalsEmptyState({ onCreate }: { onCreate: () => void }) {
   return (

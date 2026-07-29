@@ -1,7 +1,6 @@
 import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns';
 import type { GoalDailyAction, GoalWeeklyTarget } from '@/store/goalTypes';
-
-const genId = () => Math.random().toString(36).slice(2, 11);
+import { genId } from '@/utils/ids';
 
 export function getWeekStart(date: Date): string {
   return format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd');

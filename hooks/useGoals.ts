@@ -175,7 +175,3 @@ export function useGoalDetail(goalId: string) {
     health: meta?.health ?? null,
   };
 }
-
-export function sortGoalsByPriority(goals: LifeGoal[]): LifeGoal[] {
-  return [...goals].sort((a, b) => a.order - b.order);
-}

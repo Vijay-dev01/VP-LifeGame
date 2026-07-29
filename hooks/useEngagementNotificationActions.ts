@@ -1,22 +1,18 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import { isRunningInExpoGo } from 'expo';
 import * as Linking from 'expo-linking';
 import { format } from 'date-fns';
 import { useStore } from '@/store';
+import {
+  shouldSkipNotificationHandlers,
+  SMART_NOTIFICATION_SOURCE,
+} from '@/hooks/notifications/shared';
 
-const SMART_SOURCE = 'lifegame-smart';
+const SMART_SOURCE = SMART_NOTIFICATION_SOURCE;
 const PLAN_START_ACTION = 'PLAN_START';
-
-function shouldSkip(): boolean {
-  if (Platform.OS === 'web') return true;
-  if (Platform.OS === 'android' && isRunningInExpoGo()) return true;
-  return false;
-}
 
 export function useEngagementNotificationActions() {
   useEffect(() => {
-    if (shouldSkip()) return;
+    if (shouldSkipNotificationHandlers()) return;
 
     let sub: { remove: () => void } | null = null;
 

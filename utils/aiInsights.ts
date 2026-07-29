@@ -3,7 +3,8 @@ import { computeReflectionInsights } from './reflectionInsights';
 
 export async function fetchAiDistractionInsight(
   apiKey: string,
-  reflections: { distraction: DistractionType; date: string }[]
+  reflections: { distraction: DistractionType; date: string }[],
+  signal?: AbortSignal
 ): Promise<string | null> {
   if (!apiKey.trim()) return null;
 
@@ -23,6 +24,7 @@ export async function fetchAiDistractionInsight(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey.trim()}`,
       },
+      signal,
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [

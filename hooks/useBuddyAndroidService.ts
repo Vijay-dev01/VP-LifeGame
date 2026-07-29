@@ -44,9 +44,11 @@ async function registerBackgroundStopHandler(notifee: NotifeeModule) {
 }
 
 if (Platform.OS === 'android' && !isRunningInExpoGo()) {
-  loadNotifee().then((notifee) => {
-    if (notifee) registerBackgroundStopHandler(notifee);
-  });
+  loadNotifee()
+    .then((notifee) => {
+      if (notifee) registerBackgroundStopHandler(notifee);
+    })
+    .catch(() => undefined);
 }
 
 export type AndroidServiceStartResult = {

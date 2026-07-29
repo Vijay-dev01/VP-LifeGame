@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLifeAnalytics } from '@/hooks/useLifeAnalytics';
 import { getCategoryById } from '@/constants/lifeLogCategories';
@@ -7,6 +7,7 @@ import { formatDurationHours } from '@/utils/lifeLog';
 import { useStore } from '@/store';
 import { computeReflectionInsights, formatReflectionInsight } from '@/utils/reflectionInsights';
 import { fetchAiDistractionInsight } from '@/utils/aiInsights';
+import { getSecureApiKey } from '@/utils/secureAiKey';
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -20,17 +21,35 @@ function StatCard({ label, value }: { label: string; value: string }) {
 export function LifeAnalytics() {
   const { metrics, insights } = useLifeAnalytics();
   const reflections = useStore((s) => s.reflections);
-  const aiSettings = useStore((s) => s.aiSettings);
+  const aiEnabled = useStore((s) => s.aiSettings.enabled);
   const reflectionInsight = computeReflectionInsights(reflections);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!aiSettings.enabled || !aiSettings.apiKey) {
+    if (!aiEnabled) {
       setAiInsight(null);
       return;
     }
-    fetchAiDistractionInsight(aiSettings.apiKey, reflections).then(setAiInsight);
-  }, [aiSettings.enabled, aiSettings.apiKey, reflections]);
+
+    const timer = setTimeout(() => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      getSecureApiKey().then((apiKey) => {
+        if (!apiKey || controller.signal.aborted) return;
+        fetchAiDistractionInsight(apiKey, reflections, controller.signal).then((result) => {
+          if (!controller.signal.aborted) setAiInsight(result);
+        });
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      abortRef.current?.abort();
+    };
+  }, [aiEnabled, reflections]);
 
   return (
     <View style={styles.card}>

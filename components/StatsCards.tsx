@@ -1,36 +1,26 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useStore } from '@/store';
-import {
-  computeTotalDoneThisMonth,
-  computeBestStreak,
-  computeMonthlyCompletionPercent,
-} from '@/store';
+import { useMonthlyStats } from '@/hooks/useMonthlyStats';
 import { theme } from '@/constants/theme';
 
 export function StatsCards() {
   const habits = useStore((s) => s.habits);
-  const completions = useStore((s) => s.completions);
-  const currentMonth = useStore((s) => s.currentMonth);
-  const totalDone = useMemo(
-    () => computeTotalDoneThisMonth(completions, currentMonth),
-    [completions, currentMonth]
-  );
-  const bestStreak = useMemo(
-    () => computeBestStreak(habits, completions),
-    [habits, completions]
-  );
-  const completionPercent = useMemo(
-    () => computeMonthlyCompletionPercent(habits, completions, currentMonth),
-    [habits, completions, currentMonth]
-  );
+  const { totalDone, bestStreak, monthlyPercent: completionPercent } = useMonthlyStats();
 
-  const cards = [
-    { label: 'CHECK-INS THIS MONTH', value: String(totalDone) },
-    { label: 'CURRENT TRACKING LIST', value: String(habits.length), sub: 'ACTIVE HABITS' },
-    { label: bestStreak.habitName.toUpperCase(), value: `${bestStreak.days} Days`, sub: 'BEST STREAK' },
-    { label: 'MONTHLY TARGET', value: `${completionPercent}%`, sub: 'COMPLETION' },
-  ];
+  const cards = useMemo(
+    () => [
+      { label: 'CHECK-INS THIS MONTH', value: String(totalDone) },
+      { label: 'CURRENT TRACKING LIST', value: String(habits.length), sub: 'ACTIVE HABITS' },
+      {
+        label: bestStreak.habitName.toUpperCase(),
+        value: `${bestStreak.days} Days`,
+        sub: 'BEST STREAK',
+      },
+      { label: 'MONTHLY TARGET', value: `${completionPercent}%`, sub: 'COMPLETION' },
+    ],
+    [totalDone, habits.length, bestStreak, completionPercent]
+  );
 
   return (
     <View style={styles.grid}>

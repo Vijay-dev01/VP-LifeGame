@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createSafeStorage } from './persist';
+import { genId } from '@/utils/ids';
+import { stashLegacyApiKey } from '@/utils/legacyAiKeyMigration';
 import { getDefaultTitleForCategory } from '@/constants/lifeLogCategories';
 import { calcActivityXp, GOAL_XP, HABIT_XP_BONUS } from '@/constants/xp';
 import type {
@@ -22,10 +24,7 @@ import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatch
 import { calcDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
   addDays,
-  differenceInCalendarDays,
-  endOfMonth,
   format,
-  getDate,
   parseISO,
   startOfMonth,
 } from 'date-fns';
@@ -113,7 +112,6 @@ export interface NightlyReflection {
 
 export interface AiSettings {
   enabled: boolean;
-  apiKey: string;
 }
 
 export interface ForgotToStopState {
@@ -170,11 +168,7 @@ interface AppState {
     amount: number,
     meta: { source: GoalProgressEntry['source']; sourceId?: string; note?: string; date?: string }
   ) => void;
-  getActiveGoals: () => LifeGoal[];
-  getGoalById: (id: string) => LifeGoal | undefined;
-  getGoalHealth: (goalId: string) => GoalHealthSnapshot | null;
   ensureWeeklyTargetsForActiveGoals: () => void;
-  spawnDailyActionsForDate: (date: string) => void;
   evaluateGoalProgressFromMission: (task: DayTask, wasDone: boolean, nowDone: boolean) => void;
   evaluateGoalProgressFromLifeLog: (log: LifeLog) => void;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
@@ -242,14 +236,15 @@ interface AppState {
   resetNotificationState: (date: string) => void;
   markMonthProcessed: (month: string) => void;
   resetAllData: () => void;
-  totalDoneThisMonth: () => number;
-  bestStreak: () => { days: number; habitName: string };
-  monthlyCompletionPercent: () => number;
-  consistencyTrend: () => { day: number; count: number }[];
-  habitCompletionPercent: (habitId: string) => number;
 }
 
-const genId = () => Math.random().toString(36).slice(2, 11);
+export {
+  computeBestStreak,
+  computeConsistencyTrend,
+  computeHabitCompletionPercent,
+  computeMonthlyCompletionPercent,
+  computeTotalDoneThisMonth,
+} from './selectors';
 
 function recomputeGoalCurrentValue(
   goalId: string,
@@ -286,91 +281,6 @@ function checkAndAwardGoalMilestones(
   };
 }
 
-// Pure helpers for derived state (use in useMemo to avoid getSnapshot infinite loop)
-export function computeTotalDoneThisMonth(
-  completions: Record<string, string[]>,
-  currentMonth: string
-): number {
-  const start = new Date(currentMonth + 'T12:00:00');
-  const end = endOfMonth(start);
-  let total = 0;
-  for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
-    total += (completions[format(d, 'yyyy-MM-dd')] ?? []).length;
-  }
-  return total;
-}
-
-export function computeBestStreak(
-  habits: Habit[],
-  completions: Record<string, string[]>
-): { days: number; habitName: string } {
-  let bestDays = 0;
-  let bestName = '';
-  for (const habit of habits) {
-    const dates = Object.entries(completions)
-      .filter(([, ids]) => ids.includes(habit.id))
-      .map(([d]) => d)
-      .sort();
-    let streak = 0;
-    let maxStreak = 0;
-    let prev: string | null = null;
-    for (const d of dates) {
-      streak =
-        prev && differenceInCalendarDays(new Date(d), new Date(prev)) === 1
-          ? streak + 1
-          : 1;
-      prev = d;
-      maxStreak = Math.max(maxStreak, streak);
-    }
-    if (maxStreak > bestDays) {
-      bestDays = maxStreak;
-      bestName = habit.name;
-    }
-  }
-  return { days: bestDays, habitName: bestName || '—' };
-}
-
-export function computeMonthlyCompletionPercent(
-  habits: Habit[],
-  completions: Record<string, string[]>,
-  currentMonth: string
-): number {
-  const start = new Date(currentMonth + 'T12:00:00');
-  const end = endOfMonth(start);
-  const possible = habits.length * getDate(end);
-  if (possible === 0) return 0;
-  return Math.round((computeTotalDoneThisMonth(completions, currentMonth) / possible) * 100);
-}
-
-export function computeConsistencyTrend(
-  completions: Record<string, string[]>,
-  currentMonth: string
-): { day: number; count: number }[] {
-  const start = new Date(currentMonth + 'T12:00:00');
-  const daysInMonth = getDate(endOfMonth(start));
-  const result: { day: number; count: number }[] = [];
-  for (let i = 1; i <= daysInMonth; i++) {
-    const key = format(addDays(start, i - 1), 'yyyy-MM-dd');
-    result.push({ day: i, count: (completions[key] ?? []).length });
-  }
-  return result;
-}
-
-export function computeHabitCompletionPercent(
-  habitId: string,
-  completions: Record<string, string[]>,
-  currentMonth: string
-): number {
-  const start = new Date(currentMonth + 'T12:00:00');
-  const end = endOfMonth(start);
-  const daysInMonth = getDate(end);
-  let done = 0;
-  for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
-    if ((completions[format(d, 'yyyy-MM-dd')] ?? []).includes(habitId)) done++;
-  }
-  return daysInMonth === 0 ? 0 : Math.round((done / daysInMonth) * 100);
-}
-
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -399,7 +309,7 @@ export const useStore = create<AppState>()(
       dayPlans: {},
       dailyGoalScore: 90,
       reflections: [],
-      aiSettings: { enabled: false, apiKey: '' },
+      aiSettings: { enabled: false },
       forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
       buddySettings: { enabled: false, userName: 'Vijay', lockScreenListen: false },
       pendingStopFromNotification: false,
@@ -1095,34 +1005,6 @@ export const useStore = create<AppState>()(
         get().incrementGoalProgress(goalId, amount, { source: 'manual', note });
       },
 
-      getActiveGoals: () =>
-        get()
-          .lifeGoals.filter((g) => g.status === 'active')
-          .sort((a, b) => a.order - b.order),
-
-      getGoalById: (id) => get().lifeGoals.find((g) => g.id === id),
-
-      getGoalHealth: (goalId) => {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const snapshot = get().goalHealthSnapshots.find(
-          (h) => h.goalId === goalId && h.date === today
-        );
-        if (snapshot) return snapshot;
-        const goal = get().lifeGoals.find((g) => g.id === goalId);
-        if (!goal) return null;
-        const weekStart = getWeekStart(new Date());
-        const weeklyTarget = get().goalWeeklyTargets.find(
-          (w) => w.goalId === goalId && w.weekStart === weekStart
-        );
-        return computeGoalHealth(
-          goal,
-          get().goalProgressEntries,
-          today,
-          weeklyTarget?.targetValue ?? 0,
-          weeklyTarget?.actualValue ?? 0
-        );
-      },
-
       ensureWeeklyTargetsForActiveGoals: () => {
         const today = format(new Date(), 'yyyy-MM-dd');
         const weekStart = getWeekStart(new Date());
@@ -1186,10 +1068,6 @@ export const useStore = create<AppState>()(
         }
       },
 
-      spawnDailyActionsForDate: (date) => {
-        get().ensureWeeklyTargetsForActiveGoals();
-      },
-
       evaluateGoalProgressFromMission: (task, wasDone, nowDone) => {
         if (!nowDone || wasDone) return;
         const rules = get().goalProgressRules.filter(
@@ -1246,7 +1124,7 @@ export const useStore = create<AppState>()(
           dayPlans: {},
           dailyGoalScore: 90,
           reflections: [],
-          aiSettings: { enabled: false, apiKey: '' },
+          aiSettings: { enabled: false },
           forgotToStopState: { lastPromptDate: null, thresholdHours: 4 },
           buddySettings: { enabled: false, userName: 'Vijay', lockScreenListen: false },
           pendingStopFromNotification: false,
@@ -1262,81 +1140,20 @@ export const useStore = create<AppState>()(
           goalProgressEntries: [],
           goalHealthSnapshots: [],
         }),
-
-      totalDoneThisMonth: () => {
-        const { completions, currentMonth } = get();
-        const start = new Date(currentMonth + 'T12:00:00');
-        const end = endOfMonth(start);
-        let total = 0;
-        for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
-          total += (completions[format(d, 'yyyy-MM-dd')] ?? []).length;
-        }
-        return total;
-      },
-
-      bestStreak: () => {
-        const { habits, completions } = get();
-        let bestDays = 0;
-        let bestName = '';
-        for (const habit of habits) {
-          const dates = Object.entries(completions)
-            .filter(([, ids]) => ids.includes(habit.id))
-            .map(([d]) => d)
-            .sort();
-          let streak = 0;
-          let maxStreak = 0;
-          let prev: string | null = null;
-          for (const d of dates) {
-            streak =
-              prev && differenceInCalendarDays(new Date(d), new Date(prev)) === 1
-                ? streak + 1
-                : 1;
-            prev = d;
-            maxStreak = Math.max(maxStreak, streak);
-          }
-          if (maxStreak > bestDays) {
-            bestDays = maxStreak;
-            bestName = habit.name;
-          }
-        }
-        return { days: bestDays, habitName: bestName || '—' };
-      },
-
-      monthlyCompletionPercent: () => {
-        const { habits, currentMonth } = get();
-        const start = new Date(currentMonth + 'T12:00:00');
-        const end = endOfMonth(start);
-        const possible = habits.length * getDate(end);
-        if (possible === 0) return 0;
-        return Math.round((get().totalDoneThisMonth() / possible) * 100);
-      },
-
-      consistencyTrend: () => {
-        const { completions, currentMonth } = get();
-        const start = new Date(currentMonth + 'T12:00:00');
-        const daysInMonth = getDate(endOfMonth(start));
-        const result: { day: number; count: number }[] = [];
-        for (let i = 1; i <= daysInMonth; i++) {
-          const key = format(addDays(start, i - 1), 'yyyy-MM-dd');
-          result.push({ day: i, count: (completions[key] ?? []).length });
-        }
-        return result;
-      },
-
-      habitCompletionPercent: (habitId) => {
-        const { currentMonth } = get();
-        const start = new Date(currentMonth + 'T12:00:00');
-        const end = endOfMonth(start);
-        const daysInMonth = getDate(end);
-        let done = 0;
-        for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
-          if ((get().completions[format(d, 'yyyy-MM-dd')] ?? []).includes(habitId)) done++;
-        }
-        return daysInMonth === 0 ? 0 : Math.round((done / daysInMonth) * 100);
-      },
     }),
     {
       name: 'lifegame-store',
+      version: 1,
+      migrate: (persisted: unknown) => {
+        const state = persisted as {
+          aiSettings?: { enabled?: boolean; apiKey?: string };
+        };
+        if (state?.aiSettings?.apiKey) {
+          stashLegacyApiKey(state.aiSettings.apiKey);
+          state.aiSettings = { enabled: state.aiSettings.enabled ?? false };
+        }
+        return persisted as AppState;
+      },
       storage: createJSONStorage(() => createSafeStorage()),
       partialize: (s) => ({
         habits: s.habits,

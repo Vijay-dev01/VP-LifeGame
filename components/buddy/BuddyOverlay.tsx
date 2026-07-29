@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { useBuddyOptional } from '@/hooks/useBuddyAssistant';
 
-export function BuddyOverlay() {
+const TAB_BAR_HEIGHT = 49;
+const FAB_CLEARANCE = 72;
+
+export const BuddyOverlay = memo(function BuddyOverlay() {
   const buddy = useBuddyOptional();
+  const insets = useSafeAreaInsets();
+
   if (!buddy?.enabled) return null;
 
   const active =
@@ -17,48 +23,83 @@ export function BuddyOverlay() {
       ? buddy.lockScreenStatusLabel
       : buddy.statusLabel;
 
+  const bottom = TAB_BAR_HEIGHT + insets.bottom + 8;
+
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
-      <Pressable
-        style={[styles.pill, active && styles.pillActive]}
-        onPress={buddy.toggleManualCommand}
-      >
-        <Text style={styles.icon}>{active ? '🎙' : '🤖'}</Text>
-        <View style={styles.textWrap}>
-          <Text style={styles.label}>Hey Buddy</Text>
-          <Text style={styles.status} numberOfLines={1}>
-            {overlayStatus}
-          </Text>
+    <View style={[styles.wrap, { bottom, left: 12 }]} pointerEvents="box-none">
+      {active ? (
+        <View style={styles.activeBlock}>
+          <Pressable
+            style={[styles.pill, styles.pillActive]}
+            onPress={buddy.toggleManualCommand}
+          >
+            <Text style={styles.icon}>{buddy.mode === 'speaking' ? '🔊' : '🎙'}</Text>
+            <View style={styles.textWrap}>
+              <Text style={styles.label}>Hey Buddy</Text>
+              <Text style={styles.status} numberOfLines={1}>
+                {overlayStatus}
+              </Text>
+            </View>
+          </Pressable>
+          {buddy.error ? <Text style={styles.error}>{buddy.error}</Text> : null}
+          {buddy.lastTranscript ? (
+            <Text style={styles.transcript} numberOfLines={2}>
+              &quot;{buddy.lastTranscript}&quot;
+            </Text>
+          ) : null}
         </View>
-      </Pressable>
-      {buddy.error ? <Text style={styles.error}>{buddy.error}</Text> : null}
-      {buddy.lastTranscript ? (
-        <Text style={styles.transcript} numberOfLines={2}>
-          &quot;{buddy.lastTranscript}&quot;
-        </Text>
-      ) : null}
+      ) : (
+        <Pressable
+          style={styles.iconBtn}
+          onPress={buddy.toggleManualCommand}
+          accessibilityLabel="Hey Buddy"
+          accessibilityRole="button"
+        >
+          <Text style={styles.iconOnly}>🤖</Text>
+        </Pressable>
+      )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    left: 12,
-    bottom: 88,
-    right: 80,
     zIndex: 100,
+    maxWidth: '100%',
+    paddingRight: FAB_CLEARANCE,
+  },
+  activeBlock: {
+    maxWidth: '100%',
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  iconOnly: {
+    fontSize: 16,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: theme.surface,
     borderWidth: 1,
     borderColor: theme.border,
     borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -70,10 +111,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(220,38,38,0.12)',
   },
   icon: {
-    fontSize: 18,
+    fontSize: 16,
   },
   textWrap: {
     flex: 1,
+    minWidth: 0,
   },
   label: {
     fontSize: 11,
