@@ -7,10 +7,10 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { NotificationScheduler } from '@/components/NotificationScheduler';
 import { useMonthlyLifecycle } from '@/hooks/useMonthlyLifecycle';
 import { useLifeLogTimerSync } from '@/hooks/useLifeLogTimerSync';
 import { useLifeLogNotificationActions } from '@/hooks/useLifeLogNotificationActions';
-import { useSmartNotifications } from '@/hooks/useSmartNotifications';
 import { useEngagementNotificationActions } from '@/hooks/useEngagementNotificationActions';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -55,7 +55,6 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   useMonthlyLifecycle();
-  useSmartNotifications();
   useLifeLogTimerSync();
   useLifeLogNotificationActions();
   useEngagementNotificationActions();
@@ -65,6 +64,7 @@ function RootLayoutNav() {
       <BuddyProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <StatusBar style="light" />
+          <NotificationScheduler />
           <View style={{ flex: 1 }}>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

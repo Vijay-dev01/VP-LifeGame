@@ -1,6 +1,5 @@
 import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { format, parseISO } from 'date-fns';
 import { router } from 'expo-router';
 import type { LifeLog } from '@/store';
@@ -10,10 +9,9 @@ import { formatDuration, MOOD_EMOJI } from '@/utils/lifeLog';
 
 interface LifeLogCardProps {
   log: LifeLog;
-  index?: number;
 }
 
-export const LifeLogCard = memo(function LifeLogCard({ log, index = 0 }: LifeLogCardProps) {
+export const LifeLogCard = memo(function LifeLogCard({ log }: LifeLogCardProps) {
   const timeLabel = format(parseISO(log.startTime), 'h:mm a');
 
   const handlePress = useCallback(() => {
@@ -21,8 +19,7 @@ export const LifeLogCard = memo(function LifeLogCard({ log, index = 0 }: LifeLog
   }, [log.id]);
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 40).duration(280)}>
-      <Pressable style={styles.card} onPress={handlePress}>
+    <Pressable style={styles.card} onPress={handlePress}>
         <View style={styles.timeCol}>
           <Text style={styles.time}>{timeLabel}</Text>
         </View>
@@ -47,7 +44,6 @@ export const LifeLogCard = memo(function LifeLogCard({ log, index = 0 }: LifeLog
           </View>
         </View>
       </Pressable>
-    </Animated.View>
   );
 });
 

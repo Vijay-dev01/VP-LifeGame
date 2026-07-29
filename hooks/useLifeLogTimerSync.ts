@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { format } from 'date-fns';
 import { useStore } from '@/store';
@@ -19,13 +19,6 @@ export function useLifeLogTimerSync() {
   const prevTimerRef = useRef<string | null>(null);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const forgotNudgeSentRef = useRef<string | null>(null);
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!activeTimer) return;
-    const id = setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => clearInterval(id);
-  }, [activeTimer]);
 
   useEffect(() => {
     const timerKey = activeTimer

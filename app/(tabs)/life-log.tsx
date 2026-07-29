@@ -4,17 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Header } from '@/components/Header';
 import { XPBadge } from '@/components/XPBadge';
-import { ActiveTimerBar } from '@/components/life-log/ActiveTimerBar';
 import { FloatingAddButton } from '@/components/life-log/FloatingAddButton';
 import { ForgotToStopModal } from '@/components/life-log/ForgotToStopModal';
 import { LifeLogFiltersBar } from '@/components/life-log/LifeLogFilters';
 import { LifeLogTimeline } from '@/components/life-log/LifeLogTimeline';
+import { LifeLogTimerSection } from '@/components/life-log/LifeLogTimerSection';
 import { PostStopSuggestionSheet } from '@/components/life-log/PostStopSuggestionSheet';
-import { QuickAddBar } from '@/components/life-log/QuickAddBar';
 import { RecentActivitiesRow } from '@/components/life-log/RecentActivitiesRow';
 import { StopTimerModal } from '@/components/life-log/StopTimerModal';
 import { SuggestedNextRow } from '@/components/life-log/SuggestedNextRow';
-import { TimeSummary } from '@/components/life-log/TimeSummary';
 import { TodayScheduleRow } from '@/components/life-log/TodayScheduleRow';
 import { PlanTomorrowSheet } from '@/components/plan/PlanTomorrowSheet';
 import { NightlyReflectionModal } from '@/components/reflection/NightlyReflectionModal';
@@ -24,7 +22,7 @@ import { calcActivityXp } from '@/constants/xp';
 import { useNightlyReflection, usePlanTomorrow } from '@/hooks/useEngagementModals';
 import { useForgotToStop } from '@/hooks/useForgotToStop';
 import { useLifeLog } from '@/hooks/useLifeLog';
-import { useTimer } from '@/hooks/useTimer';
+import { useLifeLogTimerControls } from '@/hooks/useLifeLogTimerControls';
 import { useVoiceLogging } from '@/hooks/useVoiceLogging';
 import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
@@ -49,7 +47,7 @@ export default function LifeLogScreen() {
     todayLabel,
   } = useLifeLog();
 
-  const { activeTimer, elapsedSeconds, isRunning, isPaused, start, stop, togglePause } = useTimer();
+  const { activeTimer, isRunning, start, stop } = useLifeLogTimerControls();
   const { showModal: showForgotModal, dismiss: dismissForgot } = useForgotToStop();
   const { showModal: showReflection, save: saveReflection, skip: skipReflection } =
     useNightlyReflection();
@@ -121,12 +119,11 @@ export default function LifeLogScreen() {
             </Pressable>
           </View>
 
-          <TimeSummary
+          <LifeLogTimerSection
             todayLabel={todayLabel}
             todayTotalMinutes={todayTotalMinutes}
-            isRunning={isRunning}
-            elapsedSeconds={elapsedSeconds}
-            activeTitle={activeTimer?.title}
+            onStopPress={handleStopPress}
+            onQuickStart={handleQuickStart}
           />
 
           <TodayScheduleRow
@@ -134,19 +131,6 @@ export default function LifeLogScreen() {
             onPlanPress={() => setShowPlan(true)}
             disabled={isRunning}
           />
-
-          {isRunning && activeTimer ? (
-            <ActiveTimerBar
-              categoryId={activeTimer.category}
-              title={activeTimer.title}
-              elapsedSeconds={elapsedSeconds}
-              isPaused={isPaused}
-              onStop={handleStopPress}
-              onTogglePause={togglePause}
-            />
-          ) : (
-            <QuickAddBar onQuickStart={handleQuickStart} disabled={isRunning} />
-          )}
 
           <Pressable
             style={[styles.voiceBtn, listening && styles.voiceBtnActive]}

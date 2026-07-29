@@ -13,6 +13,7 @@ import type {
   GoalProgressRule,
   GoalWeeklyTarget,
   LifeGoal,
+  UpdateGoalInput,
 } from '@/store/goalTypes';
 import {
   generateDailyActionsForWeek,
@@ -20,6 +21,7 @@ import {
   getWeekStart,
 } from '@/utils/goalDecomposition';
 import { computeGoalHealth } from '@/utils/goalHealth';
+import { syncDailyActionsFromDayProgress } from '@/utils/goalDailyActionSync';
 import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatching';
 import { calcDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
@@ -159,10 +161,10 @@ interface AppState {
   goalHealthSnapshots: GoalHealthSnapshot[];
   addLifeGoal: (input: CreateGoalInput) => string;
   updateLifeGoal: (id: string, patch: Partial<LifeGoal>) => void;
-  pauseGoal: (id: string) => void;
-  completeGoal: (id: string) => void;
-  archiveGoal: (id: string) => void;
+  updateLifeGoalDetails: (id: string, input: UpdateGoalInput) => void;
+  deleteLifeGoal: (id: string) => void;
   addManualGoalProgress: (goalId: string, amount?: number, note?: string) => void;
+  deleteGoalProgressEntry: (entryId: string) => void;
   incrementGoalProgress: (
     goalId: string,
     amount: number,
@@ -879,16 +881,87 @@ export const useStore = create<AppState>()(
         }));
       },
 
-      pauseGoal: (id) => get().updateLifeGoal(id, { status: 'paused' }),
+      updateLifeGoalDetails: (id, input) => {
+        const state = get();
+        const goal = state.lifeGoals.find((g) => g.id === id);
+        if (!goal) return;
 
-      completeGoal: (id) => {
-        get().updateLifeGoal(id, {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-        });
+        const keywords = suggestKeywordsFromTitle(input.title);
+        let goalProgressRules = [...state.goalProgressRules.filter((r) => r.goalId !== id)];
+
+        if (input.linkMissions) {
+          goalProgressRules.push({
+            id: genId(),
+            goalId: id,
+            source: 'mission',
+            matchType: 'keyword',
+            matchValue: keywords,
+            incrementValue: 1,
+            enabled: true,
+          });
+        }
+        if (input.linkLifeLog) {
+          goalProgressRules.push({
+            id: genId(),
+            goalId: id,
+            source: 'life_log',
+            matchType: 'keyword',
+            matchValue: keywords,
+            incrementValue: input.metricType === 'duration_minutes' ? 0 : 1,
+            enabled: true,
+          });
+        }
+
+        set((s) => ({
+          lifeGoals: s.lifeGoals.map((g) =>
+            g.id === id
+              ? {
+                  ...g,
+                  title: input.title.trim(),
+                  emoji: input.emoji,
+                  category: input.category,
+                  metricType: input.metricType,
+                  targetValue: input.targetValue,
+                  unit: input.unit.trim() || g.unit,
+                  deadlineDate: input.deadlineDate,
+                  motivationNote: input.motivationNote?.trim() || undefined,
+                }
+              : g
+          ),
+          goalProgressRules,
+        }));
       },
 
-      archiveGoal: (id) => get().updateLifeGoal(id, { status: 'archived' }),
+      deleteLifeGoal: (id) => {
+        set((s) => {
+          const goalActions = s.goalDailyActions.filter((a) => a.goalId === id);
+          const actionIds = new Set(goalActions.map((a) => a.id));
+          const missionTaskIds = new Set(
+            goalActions.flatMap((a) => (a.missionTaskId ? [a.missionTaskId] : []))
+          );
+
+          const dayTasks: Record<string, DayTask[]> = {};
+          for (const [date, tasks] of Object.entries(s.dayTasks)) {
+            const filtered = tasks.filter(
+              (t) =>
+                t.goalId !== id &&
+                !missionTaskIds.has(t.id) &&
+                !(t.goalDailyActionId && actionIds.has(t.goalDailyActionId))
+            );
+            if (filtered.length > 0) dayTasks[date] = filtered;
+          }
+
+          return {
+            lifeGoals: s.lifeGoals.filter((g) => g.id !== id),
+            goalWeeklyTargets: s.goalWeeklyTargets.filter((w) => w.goalId !== id),
+            goalDailyActions: s.goalDailyActions.filter((a) => a.goalId !== id),
+            goalProgressRules: s.goalProgressRules.filter((r) => r.goalId !== id),
+            goalProgressEntries: s.goalProgressEntries.filter((e) => e.goalId !== id),
+            goalHealthSnapshots: s.goalHealthSnapshots.filter((h) => h.goalId !== id),
+            dayTasks,
+          };
+        });
+      },
 
       incrementGoalProgress: (goalId, amount, meta) => {
         if (amount <= 0) return;
@@ -915,6 +988,8 @@ export const useStore = create<AppState>()(
           createdAt: new Date().toISOString(),
         };
 
+        let completedActionTitles: string[] = [];
+
         set((s) => {
           const entries = [...s.goalProgressEntries, entry];
           let lifeGoals = s.lifeGoals.map((g) => {
@@ -926,24 +1001,14 @@ export const useStore = create<AppState>()(
             return checkAndAwardGoalMilestones(updated, get().awardXp);
           });
 
-          let goalDailyActions = s.goalDailyActions;
-          if (meta.sourceId) {
-            const action = s.goalDailyActions.find((a) => a.missionTaskId === meta.sourceId);
-            if (action && !action.done) {
-              goalDailyActions = s.goalDailyActions.map((a) =>
-                a.id === action.id
-                  ? {
-                      ...a,
-                      actualValue: a.actualValue + amount,
-                      done: a.actualValue + amount >= a.targetValue,
-                    }
-                  : a
-              );
-              if (action.actualValue + amount >= action.targetValue) {
-                get().awardXp(GOAL_XP.DAILY_ACTION_COMPLETE, action.title);
-              }
-            }
-          }
+          const sync = syncDailyActionsFromDayProgress(
+            s.goalDailyActions,
+            entries,
+            goalId,
+            today
+          );
+          completedActionTitles = sync.newlyCompleted;
+          const goalDailyActions = sync.actions;
 
           const weekStart = getWeekStart(new Date());
           const weeklyTarget = s.goalWeeklyTargets.find(
@@ -996,6 +1061,10 @@ export const useStore = create<AppState>()(
           };
         });
 
+        for (const title of completedActionTitles) {
+          get().awardXp(GOAL_XP.DAILY_ACTION_COMPLETE, title);
+        }
+
         if (meta.source === 'manual') {
           get().awardXp(GOAL_XP.MANUAL_PROGRESS, goal.title);
         }
@@ -1003,6 +1072,92 @@ export const useStore = create<AppState>()(
 
       addManualGoalProgress: (goalId, amount = 1, note) => {
         get().incrementGoalProgress(goalId, amount, { source: 'manual', note });
+      },
+
+      deleteGoalProgressEntry: (entryId) => {
+        const state = get();
+        const entry = state.goalProgressEntries.find((e) => e.id === entryId);
+        if (!entry || entry.source !== 'manual') return;
+
+        const goalId = entry.goalId;
+        const goal = state.lifeGoals.find((g) => g.id === goalId);
+        if (!goal) return;
+
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const weekStart = getWeekStart(new Date());
+
+        set((s) => {
+          const entries = s.goalProgressEntries.filter((e) => e.id !== entryId);
+          const newCurrentValue = recomputeGoalCurrentValue(goalId, entries);
+
+          let lifeGoals = s.lifeGoals.map((g) => {
+            if (g.id !== goalId) return g;
+            const updated: LifeGoal = {
+              ...g,
+              currentValue: newCurrentValue,
+            };
+            if (updated.status === 'completed' && newCurrentValue < updated.targetValue) {
+              return {
+                ...updated,
+                status: 'active' as const,
+                completedAt: undefined,
+              };
+            }
+            return updated;
+          });
+
+          const { actions: goalDailyActions } = syncDailyActionsFromDayProgress(
+            s.goalDailyActions,
+            entries,
+            goalId,
+            entry.date
+          );
+
+          const weeklyTarget = s.goalWeeklyTargets.find(
+            (w) => w.goalId === goalId && w.weekStart === weekStart
+          );
+          let goalWeeklyTargets = s.goalWeeklyTargets;
+          if (weeklyTarget) {
+            const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd');
+            const weekActual = entries
+              .filter(
+                (e) => e.goalId === goalId && e.date >= weekStart && e.date <= weekEnd
+              )
+              .reduce((sum, e) => sum + e.amount, 0);
+            goalWeeklyTargets = s.goalWeeklyTargets.map((w) =>
+              w.id === weeklyTarget.id ? { ...w, actualValue: weekActual } : w
+            );
+          }
+
+          const updatedGoal = lifeGoals.find((g) => g.id === goalId)!;
+          const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd');
+          const weekActual = entries
+            .filter(
+              (e) => e.goalId === goalId && e.date >= weekStart && e.date <= weekEnd
+            )
+            .reduce((sum, e) => sum + e.amount, 0);
+          const health = computeGoalHealth(
+            updatedGoal,
+            entries,
+            today,
+            weeklyTarget?.targetValue ?? 0,
+            weekActual
+          );
+          const goalHealthSnapshots = [
+            ...s.goalHealthSnapshots.filter(
+              (h) => !(h.goalId === goalId && h.date === today)
+            ),
+            health,
+          ].slice(-500);
+
+          return {
+            goalProgressEntries: entries,
+            lifeGoals,
+            goalDailyActions,
+            goalWeeklyTargets,
+            goalHealthSnapshots,
+          };
+        });
       },
 
       ensureWeeklyTargetsForActiveGoals: () => {

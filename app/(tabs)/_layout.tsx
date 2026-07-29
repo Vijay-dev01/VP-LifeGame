@@ -8,6 +8,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        lazy: true,
+        freezeOnBlur: true,
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.textMuted,
         tabBarStyle: { backgroundColor: theme.bg, borderTopColor: theme.border },
@@ -44,10 +46,15 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="analytics"
-        options={{
-          title: 'Analytics',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>▤</Text>,
-        }}
+        options={
+          {
+            title: 'Analytics',
+            unmountOnBlur: true,
+            tabBarIcon: ({ color }: { color: string }) => (
+              <Text style={{ fontSize: 20, color }}>▤</Text>
+            ),
+          } as any
+        }
       />
     </Tabs>
   );

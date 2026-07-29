@@ -356,7 +356,11 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
       setError('Enable Hey Buddy in Analytics settings');
       return;
     }
-    if (isBuddySpeaking()) return;
+    if (isBuddySpeaking()) {
+      stopBuddySpeech();
+      await startCommandListening();
+      return;
+    }
     await startCommandListening();
   }, [buddySettings.enabled, startCommandListening]);
 

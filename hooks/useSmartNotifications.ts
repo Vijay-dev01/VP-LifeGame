@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { format } from 'date-fns';
 import { useStore, type Habit } from '@/store';
@@ -11,6 +11,7 @@ import {
 const SMART_SOURCE = SMART_NOTIFICATION_SOURCE;
 const CHANNEL_ID = 'habit-reminders';
 const PLAN_CATEGORY_ID = 'plan-morning-actions';
+const RESCHEDULE_DEBOUNCE_MS = 300;
 
 let handlerConfigured = false;
 
@@ -175,231 +176,249 @@ async function scheduleWeeklySummary(Notifications: ExpoNotifications) {
   });
 }
 
-export function useSmartNotifications() {
-  const habits = useStore((s) => s.habits);
-  const completions = useStore((s) => s.completions);
-  const dayPlans = useStore((s) => s.dayPlans);
-  const activeGoalCount = useStore(
-    (s) => s.lifeGoals.filter((g) => g.status === 'active').length
-  );
-  const notificationSettings = useStore((s) => s.notificationSettings);
-  const notificationState = useStore((s) => s.notificationState);
-  const markNotificationSent = useStore((s) => s.markNotificationSent);
-  const resetNotificationState = useStore((s) => s.resetNotificationState);
-  const completedRef = useRef<number>(0);
+async function runNotificationSchedule() {
+  const state = useStore.getState();
+  const {
+    habits,
+    completions,
+    dayPlans,
+    lifeGoals,
+    goalDailyActions,
+    notificationSettings,
+  } = state;
+
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+
+  const enabled = await ensureNotificationInfra(Notifications);
+  if (!enabled) return;
+
+  await cancelManagedNotifications(Notifications);
+  if (!notificationSettings.enabled) return;
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const todayDone = useMemo(() => (completions[today] ?? []).length, [completions, today]);
+  const todayDone = (completions[today] ?? []).length;
   const totalHabits = habits.length;
   const progress = totalHabits === 0 ? 0 : Math.round((todayDone / totalHabits) * 100);
+  const activeGoalCount = lifeGoals.filter((g) => g.status === 'active').length;
+  const limit = notificationSettings.dailyLimit;
 
-  useEffect(() => {
-    if (notificationState.date !== today) {
-      resetNotificationState(today);
-    }
-  }, [notificationState.date, resetNotificationState, today]);
+  await scheduleRecurringNotification(Notifications, {
+    hour: 8,
+    minute: 0,
+    title: 'Habit Tracker',
+    body: 'Start your day. Complete your habits 💪',
+    type: 'morning',
+  });
 
-  useEffect(() => {
-    completedRef.current = todayDone;
-  }, [today]);
+  if (limit >= 2) {
+    await scheduleRecurringNotification(Notifications, {
+      hour: 20,
+      minute: 0,
+      title: 'Habit Tracker',
+      body: "Don't break your streak 🔥",
+      type: 'evening',
+    });
+  }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const run = async () => {
-      const Notifications = await getNotificationsModule();
-      if (!Notifications || cancelled) return;
-
-      const enabled = await ensureNotificationInfra(Notifications);
-      if (!enabled) return;
-
-      await cancelManagedNotifications(Notifications);
-      if (!notificationSettings.enabled || cancelled) return;
-
-      const limit = notificationSettings.dailyLimit;
+  if (limit >= 3) {
+    const custom = pickEarliestCustomReminder(habits);
+    if (custom) {
       await scheduleRecurringNotification(Notifications, {
-        hour: 8,
-        minute: 0,
+        hour: custom.hour,
+        minute: custom.minute,
         title: 'Habit Tracker',
-        body: 'Start your day. Complete your habits 💪',
-        type: 'morning',
+        body: `${custom.habitName}: time to take action.`,
+        type: `habit-${custom.habitId}`,
       });
-
-      if (limit >= 2) {
-        await scheduleRecurringNotification(Notifications, {
-          hour: 20,
+    } else {
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      let adaptive: { hour: number; minute: number; body: string; type: string } | null = null;
+      if (todayDone === 0 && nowMinutes < 10 * 60) {
+        adaptive = {
+          hour: 10,
           minute: 0,
+          body: 'No wins yet. Start your first habit now.',
+          type: 'adaptive-10am',
+        };
+      } else if (progress < 50 && nowMinutes < 18 * 60) {
+        adaptive = {
+          hour: 18,
+          minute: 0,
+          body: 'You are under 50%. Push one more habit now.',
+          type: 'adaptive-6pm',
+        };
+      } else if (progress < 100 && nowMinutes < 21 * 60) {
+        adaptive = {
+          hour: 21,
+          minute: 0,
+          body: 'Your streak is at risk. Finish your habits tonight.',
+          type: 'adaptive-9pm',
+        };
+      }
+      if (adaptive) {
+        await scheduleOneTimeTodayNotification(Notifications, {
+          hour: adaptive.hour,
+          minute: adaptive.minute,
           title: 'Habit Tracker',
-          body: "Don't break your streak 🔥",
-          type: 'evening',
+          body: adaptive.body,
+          type: adaptive.type,
         });
       }
+    }
+  }
 
-      if (limit >= 3) {
-        const custom = pickEarliestCustomReminder(habits);
-        if (custom) {
-          await scheduleRecurringNotification(Notifications, {
-            hour: custom.hour,
-            minute: custom.minute,
-            title: 'Habit Tracker',
-            body: `${custom.habitName}: time to take action.`,
-            type: `habit-${custom.habitId}`,
-          });
-        } else {
-          const now = new Date();
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
-          let adaptive: { hour: number; minute: number; body: string; type: string } | null = null;
-          if (todayDone === 0 && nowMinutes < 10 * 60) {
-            adaptive = {
-              hour: 10,
-              minute: 0,
-              body: 'No wins yet. Start your first habit now.',
-              type: 'adaptive-10am',
-            };
-          } else if (progress < 50 && nowMinutes < 18 * 60) {
-            adaptive = {
-              hour: 18,
-              minute: 0,
-              body: 'You are under 50%. Push one more habit now.',
-              type: 'adaptive-6pm',
-            };
-          } else if (progress < 100 && nowMinutes < 21 * 60) {
-            adaptive = {
-              hour: 21,
-              minute: 0,
-              body: 'Your streak is at risk. Finish your habits tonight.',
-              type: 'adaptive-9pm',
-            };
-          }
-          if (adaptive) {
-            await scheduleOneTimeTodayNotification(Notifications, {
-              hour: adaptive.hour,
-              minute: adaptive.minute,
-              title: 'Habit Tracker',
-              body: adaptive.body,
-              type: adaptive.type,
-            });
-          }
-        }
-      }
+  if (notificationSettings.weeklySummaryEnabled) {
+    await scheduleWeeklySummary(Notifications);
+  }
 
-      if (notificationSettings.weeklySummaryEnabled) {
-        await scheduleWeeklySummary(Notifications);
-      }
+  await scheduleRecurringNotification(Notifications, {
+    hour: 10,
+    minute: 0,
+    title: 'Life Goals',
+    body:
+      activeGoalCount > 0
+        ? (() => {
+            const action = goalDailyActions.find(
+              (a) =>
+                a.date === today &&
+                !a.done &&
+                lifeGoals.some((g) => g.id === a.goalId && g.status === 'active')
+            );
+            return (
+              action?.title ??
+              `${activeGoalCount} active goal${activeGoalCount > 1 ? 's' : ''} — check in`
+            );
+          })()
+        : 'Set a life goal and turn ambition into daily action',
+    type: 'goal-daily-action',
+  });
 
-      await scheduleRecurringNotification(Notifications, {
-        hour: 10,
-        minute: 0,
-        title: 'Life Goals',
-        body:
-          activeGoalCount > 0
-            ? (() => {
-                const today = format(new Date(), 'yyyy-MM-dd');
-                const action = useStore
-                  .getState()
-                  .goalDailyActions.find(
-                    (a) =>
-                      a.date === today &&
-                      !a.done &&
-                      useStore.getState().lifeGoals.some(
-                        (g) => g.id === a.goalId && g.status === 'active'
-                      )
-                  );
-                return (
-                  action?.title ??
-                  `${activeGoalCount} active goal${activeGoalCount > 1 ? 's' : ''} — check in`
-                );
-              })()
-            : 'Set a life goal and turn ambition into daily action',
-        type: 'goal-daily-action',
-      });
+  await scheduleRecurringNotification(Notifications, {
+    hour: 21,
+    minute: 0,
+    title: 'Plan Tomorrow',
+    body: 'Ready to plan tomorrow?',
+    type: 'plan-evening',
+  });
 
-      await scheduleRecurringNotification(Notifications, {
-        hour: 21,
-        minute: 0,
-        title: 'Plan Tomorrow',
-        body: 'Ready to plan tomorrow?',
-        type: 'plan-evening',
-      });
+  await scheduleRecurringNotification(Notifications, {
+    hour: 21,
+    minute: 30,
+    title: 'Daily Reflection',
+    body: 'What distracted you today?',
+    type: 'reflection-evening',
+  });
 
-      await scheduleRecurringNotification(Notifications, {
-        hour: 21,
-        minute: 30,
-        title: 'Daily Reflection',
-        body: 'What distracted you today?',
-        type: 'reflection-evening',
-      });
+  const todayPlans = dayPlans[today] ?? [];
+  const firstPlan = todayPlans.find((p) => !p.done) ?? todayPlans[0];
+  const morningParsed = firstPlan ? parseTime(firstPlan.time) : null;
+  const morningHour = morningParsed?.hour ?? 8;
+  const morningMinute = morningParsed?.minute ?? 0;
+  const morningBody = firstPlan
+    ? `Ready? First task: ${firstPlan.title}`
+    : 'No plan yet — tap to plan your day';
 
-      const todayPlans = dayPlans[today] ?? [];
-      const firstPlan = todayPlans.find((p) => !p.done) ?? todayPlans[0];
-      const morningParsed = firstPlan ? parseTime(firstPlan.time) : null;
-      const morningHour = morningParsed?.hour ?? 8;
-      const morningMinute = morningParsed?.minute ?? 0;
-      const morningBody = firstPlan
-        ? `Ready? First task: ${firstPlan.title}`
-        : 'No plan yet — tap to plan your day';
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Good morning',
+      body: morningBody,
+      data: {
+        source: SMART_SOURCE,
+        type: 'plan-morning',
+        planId: firstPlan?.id,
+        openPlan: !firstPlan,
+      },
+      sound: false,
+      categoryIdentifier: PLAN_CATEGORY_ID,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: morningHour,
+      minute: morningMinute,
+    },
+  });
+}
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Good morning',
-          body: morningBody,
-          data: {
-            source: SMART_SOURCE,
-            type: 'plan-morning',
-            planId: firstPlan?.id,
-            openPlan: !firstPlan,
-          },
-          sound: false,
-          categoryIdentifier: PLAN_CATEGORY_ID,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: morningHour,
-          minute: morningMinute,
-        },
-      });
-    };
+async function maybeSendCompletionNotification(prevDone: number, todayDone: number) {
+  const state = useStore.getState();
+  const { notificationSettings, notificationState, habits, completions } = state;
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const totalHabits = habits.length;
 
-    run().catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [habits, notificationSettings, progress, todayDone, dayPlans, today, activeGoalCount]);
+  if (!notificationSettings.enabled) return;
+  if (totalHabits === 0 || todayDone !== totalHabits || prevDone === todayDone) return;
+  if (notificationState.date === today && notificationState.sentTypes.includes('completion')) return;
+  if (notificationState.date === today && notificationState.sentCount >= notificationSettings.dailyLimit)
+    return;
+
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+  await ensureNotificationInfra(Notifications);
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Habit Tracker',
+      body: '100% done. Great job 💯',
+      data: { source: SMART_SOURCE, type: 'completion' },
+      sound: false,
+    },
+    trigger: null,
+  });
+  useStore.getState().markNotificationSent('completion', today);
+}
+
+/** @deprecated Use NotificationScheduler component instead */
+export function useSmartNotifications() {
+  useSmartNotificationsScheduler();
+}
+
+export function useSmartNotificationsScheduler() {
+  const completedRef = useRef<number>(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const prevDone = completedRef.current;
-    completedRef.current = todayDone;
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const state = useStore.getState();
+    if (state.notificationState.date !== today) {
+      state.resetNotificationState(today);
+    }
+    completedRef.current = (state.completions[today] ?? []).length;
 
-    if (!notificationSettings.enabled) return;
-    if (totalHabits === 0 || todayDone !== totalHabits || prevDone === todayDone) return;
-    if (notificationState.date === today && notificationState.sentTypes.includes('completion')) return;
-    if (notificationState.date === today && notificationState.sentCount >= notificationSettings.dailyLimit)
-      return;
+    const scheduleDebounced = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        runNotificationSchedule().catch(() => undefined);
+      }, RESCHEDULE_DEBOUNCE_MS);
+    };
 
-    (async () => {
-      const Notifications = await getNotificationsModule();
-      if (!Notifications) return;
-      await ensureNotificationInfra(Notifications);
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Habit Tracker',
-          body: '100% done. Great job 💯',
-          data: { source: SMART_SOURCE, type: 'completion' },
-          sound: false,
-        },
-        trigger: null,
-      });
-      markNotificationSent('completion', today);
-    })().catch(() => undefined);
-  }, [
-    markNotificationSent,
-    notificationSettings.dailyLimit,
-    notificationSettings.enabled,
-    notificationState.date,
-    notificationState.sentCount,
-    notificationState.sentTypes,
-    today,
-    todayDone,
-    totalHabits,
-  ]);
+    scheduleDebounced();
+
+    const unsub = useStore.subscribe((next, prev) => {
+      const todayKey = format(new Date(), 'yyyy-MM-dd');
+      const nextDone = (next.completions[todayKey] ?? []).length;
+      const prevDone = (prev.completions[todayKey] ?? []).length;
+
+      if (nextDone !== prevDone) {
+        maybeSendCompletionNotification(completedRef.current, nextDone).catch(() => undefined);
+        completedRef.current = nextDone;
+      }
+
+      if (
+        next.habits !== prev.habits ||
+        next.completions !== prev.completions ||
+        next.dayPlans !== prev.dayPlans ||
+        next.notificationSettings !== prev.notificationSettings ||
+        next.lifeGoals !== prev.lifeGoals ||
+        next.goalDailyActions !== prev.goalDailyActions
+      ) {
+        scheduleDebounced();
+      }
+    });
+
+    return () => {
+      unsub();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 }

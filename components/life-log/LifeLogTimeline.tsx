@@ -46,7 +46,7 @@ export function LifeLogTimeline({ grouped, dayTotals }: LifeLogTimelineProps) {
           </View>
           {section.logs.map((log) => {
             const idx = cardIndex++;
-            return <LifeLogCard key={log.id} log={log} index={idx} />;
+            return <LifeLogCard key={log.id} log={log} />;
           })}
         </View>
       ))}

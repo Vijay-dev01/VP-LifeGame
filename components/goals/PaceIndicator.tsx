@@ -27,14 +27,24 @@ export function PaceIndicator({ status, hint, compact }: PaceIndicatorProps) {
 
 interface GoalHealthBadgeProps {
   score: number;
+  hasProgress?: boolean;
 }
 
-export function GoalHealthBadge({ score }: GoalHealthBadgeProps) {
+function healthLabel(score: number, hasProgress: boolean): string {
+  if (!hasProgress && score === 0) return 'START';
+  if (score >= 80) return 'STRONG';
+  if (score >= 60) return 'OK';
+  if (score >= 30) return 'LOW';
+  return 'AT RISK';
+}
+
+export function GoalHealthBadge({ score, hasProgress = true }: GoalHealthBadgeProps) {
   const color = score >= 80 ? '#16a34a' : score >= 60 ? '#f59e0b' : theme.accent;
+  const label = healthLabel(score, hasProgress);
   return (
     <View style={[styles.healthBadge, { borderColor: color }]}>
       <Text style={[styles.healthScore, { color }]}>{score}</Text>
-      <Text style={styles.healthLabel}>HEALTH</Text>
+      <Text style={[styles.healthLabel, { color }]}>{label}</Text>
     </View>
   );
 }

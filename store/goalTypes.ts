@@ -94,3 +94,16 @@ export interface CreateGoalInput {
   motivationNote?: string;
   progressRules: Omit<GoalProgressRule, 'id' | 'goalId'>[];
 }
+
+export interface UpdateGoalInput {
+  title: string;
+  emoji: string;
+  category: GoalCategory;
+  metricType: GoalMetricType;
+  targetValue: number;
+  unit: string;
+  deadlineDate: string | null;
+  motivationNote?: string;
+  linkMissions: boolean;
+  linkLifeLog: boolean;
+}
