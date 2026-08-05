@@ -215,6 +215,12 @@ export default function CreateGoalScreen() {
                   </Pressable>
                 ))}
               </View>
+              {metricType === 'duration_minutes' ? (
+                <Text style={styles.durationHint}>
+                  Duration is tracked via Life Log timers (in minutes). Use unit &quot;hours&quot;
+                  for hour-based targets — missions and logs will convert automatically.
+                </Text>
+              ) : null}
 
               <View style={styles.row}>
                 <View style={styles.flex}>
@@ -296,6 +302,7 @@ export default function CreateGoalScreen() {
                 <Text style={styles.summaryTitle}>{title || 'Untitled goal'}</Text>
                 <Text style={styles.summaryMeta}>
                   Target: {targetValue || '—'} {unit}
+                  {metricType === 'duration_minutes' ? ' (tracked in minutes)' : ''}
                 </Text>
                 {hasDeadline ? (
                   <Text style={styles.summaryMeta}>Deadline: {deadlineDate}</Text>
@@ -473,6 +480,12 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     lineHeight: 20,
     marginTop: 12,
+  },
+  durationHint: {
+    fontSize: 12,
+    color: theme.textMuted,
+    lineHeight: 18,
+    marginTop: 8,
   },
   summaryCard: {
     backgroundColor: theme.surface,

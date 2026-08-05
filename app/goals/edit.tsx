@@ -20,6 +20,7 @@ import {
 } from '@/constants/goals';
 import type { GoalCategory, GoalMetricType } from '@/store/goalTypes';
 import { theme } from '@/constants/theme';
+import { toDisplayGoalAmount, toStoredGoalAmount } from '@/utils/goalUnits';
 
 function resolveGoalId(raw: string | string[] | undefined): string | undefined {
   if (Array.isArray(raw)) return raw[0];
@@ -68,7 +69,7 @@ export default function EditGoalScreen() {
     setTitle(goal.title);
     setCategory(goal.category);
     setMetricType(goal.metricType);
-    setTargetValue(String(goal.targetValue));
+    setTargetValue(String(toDisplayGoalAmount(goal.targetValue, goal.unit, goal.metricType)));
     setUnit(goal.unit);
     setHasDeadline(!!goal.deadlineDate);
     setDeadlineDate(goal.deadlineDate ?? '');

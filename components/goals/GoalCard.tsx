@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { GoalProgressRing } from '@/components/goals/GoalProgressRing';
 import { PaceIndicator, GoalHealthBadge } from '@/components/goals/PaceIndicator';
 import { theme } from '@/constants/theme';
+import { toDisplayGoalAmount } from '@/utils/goalUnits';
 import type { useGoals } from '@/hooks/useGoals';
 
 type GoalMeta = ReturnType<typeof useGoals>['goalsWithMeta'][number];
@@ -37,13 +38,17 @@ export const GoalCard = memo(function GoalCard({ meta }: GoalCardProps) {
         <GoalProgressRing
           percent={progressPercent}
           size={72}
-          current={Math.round(goal.currentValue)}
-          target={goal.targetValue}
+          current={Math.round(toDisplayGoalAmount(goal.currentValue, goal.unit, goal.metricType))}
+          target={toDisplayGoalAmount(goal.targetValue, goal.unit, goal.metricType)}
           unit={goal.unit}
         />
         <View style={styles.stats}>
           <Text style={styles.statLine}>
-            This week: {Math.round(weekActual)}/{weeklyTarget?.targetValue ?? '—'}{' '}
+            This week:{' '}
+            {toDisplayGoalAmount(weekActual, goal.unit, goal.metricType)}/
+            {weeklyTarget
+              ? toDisplayGoalAmount(weeklyTarget.targetValue, goal.unit, goal.metricType)
+              : '—'}{' '}
             {goal.unit}
           </Text>
           {goal.deadlineDate ? (

@@ -1,6 +1,7 @@
 import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns';
-import type { GoalDailyAction, GoalWeeklyTarget } from '@/store/goalTypes';
+import type { GoalDailyAction, GoalMetricType, GoalWeeklyTarget } from '@/store/goalTypes';
 import { genId } from '@/utils/ids';
+import { toDisplayGoalAmount } from '@/utils/goalUnits';
 
 export function getWeekStart(date: Date): string {
   return format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -46,9 +47,15 @@ export function generateDailyActionsForWeek(
   goalTitle: string,
   unit: string,
   today: string,
-  workDaysPerWeek = 5
+  workDaysPerWeek = 5,
+  metricType: GoalMetricType = 'count'
 ): GoalDailyAction[] {
   const dailyTarget = computeDailyTargetValue(weeklyTarget.targetValue, workDaysPerWeek);
+  const displayDaily = toDisplayGoalAmount(dailyTarget, unit, metricType);
+  const displayLabel =
+    metricType === 'duration_minutes' && displayDaily % 1 !== 0
+      ? displayDaily.toFixed(1)
+      : String(Math.round(displayDaily));
   const actions: GoalDailyAction[] = [];
   const weekStart = parseISO(weeklyTarget.weekStart);
 
@@ -63,7 +70,7 @@ export function generateDailyActionsForWeek(
       goalId,
       weeklyTargetId: weeklyTarget.id,
       date,
-      title: `${goalTitle}: ${dailyTarget} ${unit}`,
+      title: `${goalTitle}: ${displayLabel} ${unit}`,
       targetValue: dailyTarget,
       actualValue: 0,
       done: false,

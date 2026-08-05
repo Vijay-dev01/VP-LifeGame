@@ -1,10 +1,12 @@
 import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { GoalDailyAction, GoalHealthSnapshot } from '@/store/goalTypes';
+import type { GoalDailyAction, GoalHealthSnapshot, GoalMetricType } from '@/store/goalTypes';
+import { toDisplayGoalAmount, toStoredGoalAmount } from '@/utils/goalUnits';
 import { theme } from '@/constants/theme';
 
 interface GoalTodayCardProps {
   unit: string;
+  metricType: GoalMetricType;
   todayActions: GoalDailyAction[];
   health: GoalHealthSnapshot | null;
   requiredDailyRate: number;
@@ -14,6 +16,7 @@ interface GoalTodayCardProps {
 
 export const GoalTodayCard = memo(function GoalTodayCard({
   unit,
+  metricType,
   todayActions,
   health,
   requiredDailyRate,
@@ -21,15 +24,18 @@ export const GoalTodayCard = memo(function GoalTodayCard({
   onCustomLog,
 }: GoalTodayCardProps) {
   const primary = todayActions.find((a) => !a.done) ?? todayActions[0];
-  const todayTarget = primary?.targetValue ?? Math.max(1, Math.ceil(requiredDailyRate));
-  const todayActual = primary?.actualValue ?? 0;
-  const remaining = Math.max(0, todayTarget - todayActual);
-  const progress = todayTarget > 0 ? Math.min(1, todayActual / todayTarget) : 0;
-  const done = remaining <= 0 && todayActual > 0;
+  const todayTargetStored =
+    primary?.targetValue ?? Math.max(1, Math.ceil(toStoredGoalAmount(requiredDailyRate, unit, metricType)));
+  const todayActualStored = primary?.actualValue ?? 0;
+  const remainingStored = Math.max(0, todayTargetStored - todayActualStored);
+  const progress =
+    todayTargetStored > 0 ? Math.min(1, todayActualStored / todayTargetStored) : 0;
+  const done = remainingStored <= 0 && todayActualStored > 0;
 
-  const quickAmounts = [
-    1,
-    ...(remaining > 1 ? [remaining] : []),
+  const oneUnitStored = toStoredGoalAmount(1, unit, metricType);
+  const quickAmountsStored = [
+    oneUnitStored,
+    ...(remainingStored > oneUnitStored ? [remainingStored] : []),
   ].filter((v, i, arr) => arr.indexOf(v) === i);
 
   return (
@@ -52,30 +58,37 @@ export const GoalTodayCard = memo(function GoalTodayCard({
           <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
         <Text style={styles.progressText}>
-          {Math.round(todayActual)}/{Math.round(todayTarget)} {unit}
+          {toDisplayGoalAmount(todayActualStored, unit, metricType)}/
+          {toDisplayGoalAmount(todayTargetStored, unit, metricType)} {unit}
         </Text>
       </View>
 
       {health && health.requiredDailyRate > 0 && !done ? (
         <Text style={styles.hint}>
-          Need ~{health.requiredDailyRate.toFixed(1)} {unit}/day overall · doing{' '}
-          {health.currentDailyRate.toFixed(1)}
+          Need ~{toDisplayGoalAmount(health.requiredDailyRate, unit, metricType).toFixed(1)}{' '}
+          {unit}/day overall · doing{' '}
+          {toDisplayGoalAmount(health.currentDailyRate, unit, metricType).toFixed(1)}
         </Text>
       ) : null}
 
       {!done ? (
         <View style={styles.chips}>
-          {quickAmounts.map((amount) => (
-            <Pressable
-              key={amount}
-              style={styles.chip}
-              onPress={() => onQuickLog(amount)}
-            >
-              <Text style={styles.chipText}>
-                +{amount}{amount === remaining && remaining !== 1 ? ' today' : ''}
-              </Text>
-            </Pressable>
-          ))}
+          {quickAmountsStored.map((storedAmount) => {
+            const displayAmount = toDisplayGoalAmount(storedAmount, unit, metricType);
+            const isRemaining = storedAmount === remainingStored;
+            return (
+              <Pressable
+                key={storedAmount}
+                style={styles.chip}
+                onPress={() => onQuickLog(storedAmount)}
+              >
+                <Text style={styles.chipText}>
+                  +{displayAmount}
+                  {isRemaining && remainingStored !== oneUnitStored ? ' today' : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
           <Pressable style={[styles.chip, styles.chipGhost]} onPress={onCustomLog}>
             <Text style={styles.chipGhostText}>Other</Text>
           </Pressable>

@@ -30,6 +30,7 @@ import { useGoalDetail } from '@/hooks/useGoals';
 import { useStore } from '@/store';
 
 import { theme } from '@/constants/theme';
+import { toDisplayGoalAmount } from '@/utils/goalUnits';
 
 
 
@@ -181,9 +182,9 @@ export default function GoalDetailScreen() {
 
             strokeWidth={10}
 
-            current={Math.round(goal.currentValue)}
+            current={Math.round(toDisplayGoalAmount(goal.currentValue, goal.unit, goal.metricType))}
 
-            target={goal.targetValue}
+            target={toDisplayGoalAmount(goal.targetValue, goal.unit, goal.metricType)}
 
             unit={goal.unit}
 
@@ -221,6 +222,8 @@ export default function GoalDetailScreen() {
 
             unit={goal.unit}
 
+            metricType={goal.metricType}
+
             todayActions={meta?.todayActions ?? []}
 
             health={health}
@@ -257,7 +260,8 @@ export default function GoalDetailScreen() {
 
               <Text style={styles.weekText}>
 
-                {Math.round(weekActual)} / {Math.round(weekTarget)} {goal.unit}
+                {toDisplayGoalAmount(weekActual, goal.unit, goal.metricType)} /{' '}
+                {toDisplayGoalAmount(weekTarget, goal.unit, goal.metricType)} {goal.unit}
 
               </Text>
 
@@ -291,7 +295,7 @@ export default function GoalDetailScreen() {
 
             <Text style={styles.completedSub}>
 
-              You hit {goal.targetValue} {goal.unit}
+              You hit {toDisplayGoalAmount(goal.targetValue, goal.unit, goal.metricType)} {goal.unit}
 
             </Text>
 

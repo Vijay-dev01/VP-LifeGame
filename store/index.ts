@@ -22,6 +22,7 @@ import {
 } from '@/utils/goalDecomposition';
 import { computeGoalHealth } from '@/utils/goalHealth';
 import { syncDailyActionsFromDayProgress } from '@/utils/goalDailyActionSync';
+import { toStoredGoalAmount } from '@/utils/goalUnits';
 import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatching';
 import { calcDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
@@ -791,13 +792,18 @@ export const useStore = create<AppState>()(
         const id = genId();
         const today = format(new Date(), 'yyyy-MM-dd');
         const order = get().lifeGoals.length;
+        const storedTarget = toStoredGoalAmount(
+          input.targetValue,
+          input.unit,
+          input.metricType
+        );
         const goal: LifeGoal = {
           id,
           title: input.title.trim(),
           emoji: input.emoji,
           category: input.category,
           metricType: input.metricType,
-          targetValue: input.targetValue,
+          targetValue: storedTarget,
           currentValue: 0,
           unit: input.unit,
           startDate: today,
@@ -836,7 +842,7 @@ export const useStore = create<AppState>()(
         }
         const weeklyTarget = generateWeeklyTarget(
           id,
-          input.targetValue,
+          storedTarget,
           input.deadlineDate,
           today
         );
@@ -845,7 +851,9 @@ export const useStore = create<AppState>()(
           weeklyTarget,
           input.title,
           input.unit,
-          today
+          today,
+          5,
+          input.metricType
         );
         const dayTasks = { ...get().dayTasks };
         for (const action of dailyActions) {
@@ -886,6 +894,11 @@ export const useStore = create<AppState>()(
         const goal = state.lifeGoals.find((g) => g.id === id);
         if (!goal) return;
 
+        const storedTarget = toStoredGoalAmount(
+          input.targetValue,
+          input.unit,
+          input.metricType
+        );
         const keywords = suggestKeywordsFromTitle(input.title);
         let goalProgressRules = [...state.goalProgressRules.filter((r) => r.goalId !== id)];
 
@@ -921,7 +934,7 @@ export const useStore = create<AppState>()(
                   emoji: input.emoji,
                   category: input.category,
                   metricType: input.metricType,
-                  targetValue: input.targetValue,
+                  targetValue: storedTarget,
                   unit: input.unit.trim() || g.unit,
                   deadlineDate: input.deadlineDate,
                   motivationNote: input.motivationNote?.trim() || undefined,
@@ -1188,7 +1201,9 @@ export const useStore = create<AppState>()(
             weeklyTarget,
             goal.title,
             goal.unit,
-            today
+            today,
+            5,
+            goal.metricType
           );
           for (const action of newActions) {
             const exists = dailyActions.some(
@@ -1225,12 +1240,33 @@ export const useStore = create<AppState>()(
 
       evaluateGoalProgressFromMission: (task, wasDone, nowDone) => {
         if (!nowDone || wasDone) return;
+
+        if (task.goalId && task.goalDailyActionId) {
+          const goal = get().lifeGoals.find((g) => g.id === task.goalId);
+          const action = get().goalDailyActions.find((a) => a.id === task.goalDailyActionId);
+          if (goal && goal.status === 'active' && action) {
+            get().incrementGoalProgress(goal.id, action.targetValue, {
+              source: 'mission',
+              sourceId: task.id,
+              note: task.title,
+              date: task.date,
+            });
+            return;
+          }
+        }
+
         const rules = get().goalProgressRules.filter(
           (r) => r.enabled && r.source === 'mission'
         );
         for (const rule of rules) {
           if (matchesProgressRule(rule, { title: task.title })) {
-            get().incrementGoalProgress(rule.goalId, rule.incrementValue, {
+            const goal = get().lifeGoals.find((g) => g.id === rule.goalId);
+            const amount =
+              goal?.metricType === 'duration_minutes' && rule.incrementValue <= 0
+                ? 0
+                : rule.incrementValue;
+            if (amount <= 0) continue;
+            get().incrementGoalProgress(rule.goalId, amount, {
               source: 'mission',
               sourceId: task.id,
               note: task.title,
