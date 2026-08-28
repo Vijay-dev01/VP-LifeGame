@@ -24,7 +24,7 @@ import { computeGoalHealth } from '@/utils/goalHealth';
 import { syncDailyActionsFromDayProgress } from '@/utils/goalDailyActionSync';
 import { toStoredGoalAmount } from '@/utils/goalUnits';
 import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatching';
-import { calcDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
+import { calcDurationMinutes, getActiveDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import {
   addDays,
   format,
@@ -615,6 +615,7 @@ export const useStore = create<AppState>()(
           category: timer.category,
           startTime: timer.sessionStartTime ?? timer.startTime,
           endTime,
+          duration: getActiveDurationMinutes(timer),
           notes: overrides?.notes,
           mood: overrides?.mood,
           energyLevel: overrides?.energyLevel,
@@ -638,6 +639,7 @@ export const useStore = create<AppState>()(
           category: timer.category,
           startTime: timer.sessionStartTime ?? timer.startTime,
           endTime: endTimeIso,
+          duration: getActiveDurationMinutes(timer),
           notes: overrides?.notes,
           mood: overrides?.mood,
           energyLevel: overrides?.energyLevel,

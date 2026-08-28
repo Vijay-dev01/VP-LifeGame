@@ -2,17 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import { useStore } from '@/store';
+import {
+  registerBuddyBackgroundStop,
+  subscribeNotifeeForegroundEvents,
+} from '@/hooks/notifications/notifeeBackground';
 
 const CHANNEL_ID = 'hey-buddy';
-const NOTIFICATION_ID = 'buddy-listening';
+export const BUDDY_NOTIFICATION_ID = 'buddy-listening';
 
 type NotifeeModule = typeof import('@notifee/react-native');
 
 let notifeeLoadAttempted = false;
 let notifeeModule: NotifeeModule | null = null;
-let backgroundHandlerRegistered = false;
-
-const stopRef = { current: async () => undefined as void | Promise<void> };
 
 async function loadNotifee(): Promise<NotifeeModule | null> {
   if (notifeeLoadAttempted) return notifeeModule;
@@ -32,23 +33,20 @@ async function loadNotifee(): Promise<NotifeeModule | null> {
   }
 }
 
-async function registerBackgroundStopHandler(notifee: NotifeeModule) {
-  if (backgroundHandlerRegistered) return;
-  backgroundHandlerRegistered = true;
+export async function stopBuddyForegroundService(
+  opts?: { keepSettings?: boolean }
+): Promise<void> {
+  if (Platform.OS !== 'android') return;
 
-  notifee.default.onBackgroundEvent(async ({ type, detail }) => {
-    if (type === notifee.EventType.ACTION_PRESS && detail.pressAction?.id === 'stop-buddy') {
-      await stopRef.current();
-    }
-  });
-}
+  const notifee = await loadNotifee();
+  if (notifee) {
+    await notifee.default.stopForegroundService().catch(() => undefined);
+    await notifee.default.cancelNotification(BUDDY_NOTIFICATION_ID).catch(() => undefined);
+  }
 
-if (Platform.OS === 'android' && !isRunningInExpoGo()) {
-  loadNotifee()
-    .then((notifee) => {
-      if (notifee) registerBackgroundStopHandler(notifee);
-    })
-    .catch(() => undefined);
+  if (!opts?.keepSettings) {
+    useStore.getState().setBuddySettings({ lockScreenListen: false });
+  }
 }
 
 export type AndroidServiceStartResult = {
@@ -61,24 +59,15 @@ export function useBuddyAndroidService() {
   const [notifeeAvailable, setNotifeeAvailable] = useState<boolean | null>(null);
   const [lockScreenError, setLockScreenError] = useState<string | null>(null);
   const channelReadyRef = useRef(false);
+  const foregroundSubRef = useRef<(() => void) | undefined>(undefined);
 
   const stopAndroidService = useCallback(async (opts?: { keepSettings?: boolean }) => {
-    if (Platform.OS !== 'android') return;
-
-    const notifee = await loadNotifee();
-    if (notifee) {
-      await notifee.default.stopForegroundService().catch(() => undefined);
-      await notifee.default.cancelNotification(NOTIFICATION_ID).catch(() => undefined);
-    }
-
+    await stopBuddyForegroundService(opts);
     setServiceActive(false);
-    if (!opts?.keepSettings) {
-      useStore.getState().setBuddySettings({ lockScreenListen: false });
-    }
   }, []);
 
   useEffect(() => {
-    stopRef.current = stopAndroidService;
+    registerBuddyBackgroundStop(stopAndroidService);
   }, [stopAndroidService]);
 
   const ensureChannel = useCallback(async (notifee: NotifeeModule) => {
@@ -105,8 +94,11 @@ export function useBuddyAndroidService() {
       return { ok: false, error };
     }
 
-    await registerBackgroundStopHandler(notifee);
     await ensureChannel(notifee);
+
+    if (!foregroundSubRef.current) {
+      foregroundSubRef.current = subscribeNotifeeForegroundEvents(notifee);
+    }
 
     const settings = await notifee.default.requestPermission();
     if (settings.authorizationStatus === 0) {
@@ -115,26 +107,32 @@ export function useBuddyAndroidService() {
       return { ok: false, error };
     }
 
-    await notifee.default.displayNotification({
-      id: NOTIFICATION_ID,
-      title: 'Hey Buddy is listening',
-      body: 'Say "Hey Buddy" or tap Stop to disable',
-      android: {
-        channelId: CHANNEL_ID,
-        asForegroundService: true,
-        foregroundServiceTypes: [
-          notifee.AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-        ],
-        ongoing: true,
-        pressAction: { id: 'default' },
-        actions: [
-          {
-            title: 'Stop',
-            pressAction: { id: 'stop-buddy' },
-          },
-        ],
-      },
-    });
+    try {
+      await notifee.default.displayNotification({
+        id: BUDDY_NOTIFICATION_ID,
+        title: 'Hey Buddy is listening',
+        body: 'Say "Hey Buddy" or tap Stop to disable',
+        android: {
+          channelId: CHANNEL_ID,
+          asForegroundService: true,
+          foregroundServiceTypes: [
+            notifee.AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+          ],
+          ongoing: true,
+          pressAction: { id: 'default' },
+          actions: [
+            {
+              title: 'Stop',
+              pressAction: { id: 'stop-buddy' },
+            },
+          ],
+        },
+      });
+    } catch {
+      const error = 'Could not start lock screen service';
+      setLockScreenError(error);
+      return { ok: false, error };
+    }
 
     setLockScreenError(null);
     setServiceActive(true);
@@ -144,22 +142,13 @@ export function useBuddyAndroidService() {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    let unsubscribe: (() => void) | undefined;
-
     loadNotifee().then((notifee) => {
       setNotifeeAvailable(notifee !== null);
-      if (!notifee) return;
-
-      registerBackgroundStopHandler(notifee);
-
-      unsubscribe = notifee.default.onForegroundEvent(({ type, detail }) => {
-        if (type === notifee.EventType.ACTION_PRESS && detail.pressAction?.id === 'stop-buddy') {
-          stopRef.current();
-        }
-      });
+      if (!notifee || foregroundSubRef.current) return;
+      foregroundSubRef.current = subscribeNotifeeForegroundEvents(notifee);
     });
 
-    return () => unsubscribe?.();
+    return () => foregroundSubRef.current?.();
   }, []);
 
   return {

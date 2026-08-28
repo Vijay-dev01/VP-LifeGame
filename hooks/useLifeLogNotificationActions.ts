@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 import { useStore } from '@/store';
 import { shouldSkipNotificationHandlers } from '@/hooks/notifications/shared';
 import {
@@ -8,8 +9,19 @@ import {
   TIMER_ACTION_STOP,
   TIMER_SOURCE,
 } from './useLifeLogTimerNotification';
+import { updateLifeLogTimerForegroundNotification } from './useLifeLogTimerForegroundService';
 
 type ExpoNotifications = typeof import('expo-notifications');
+
+async function refreshTimerNotification(): Promise<void> {
+  const timer = useStore.getState().activeTimer;
+  if (!timer) return;
+
+  if (Platform.OS === 'android') {
+    await updateLifeLogTimerForegroundNotification(timer).catch(() => undefined);
+  }
+  await updateLifeLogTimerNotification(timer).catch(() => undefined);
+}
 
 export function useLifeLogNotificationActions() {
   useEffect(() => {
@@ -29,18 +41,14 @@ export function useLifeLogNotificationActions() {
 
         if (actionId === TIMER_ACTION_STOP) {
           setPendingStopFromNotification(true);
-          Linking.openURL('vprime://life-log?action=stop').catch(() => {});
+          Linking.openURL('vprime://life-log?action=stop').catch(() => undefined);
           return;
         }
 
         if (actionId === TIMER_ACTION_PAUSE && timer) {
-          if (timer.pausedAt) {
-            resumeTimer();
-          } else {
-            pauseTimer();
-          }
-          const updated = useStore.getState().activeTimer;
-          if (updated) updateLifeLogTimerNotification(updated).catch(() => {});
+          if (timer.pausedAt) resumeTimer();
+          else pauseTimer();
+          void refreshTimerNotification();
         }
       });
     })();

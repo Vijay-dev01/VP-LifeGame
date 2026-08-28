@@ -37,10 +37,16 @@
         {
           "android": {
             "compileSdkVersion": 36,
-            "targetSdkVersion": 34
+            "targetSdkVersion": 34,
+            "permissions": [
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+              "android.permission.FOREGROUND_SERVICE_MICROPHONE"
+            ]
           }
         }
       ],
+      "./plugins/withNotifeeForegroundService.js",
       "expo-notifications",
       "expo-web-browser",
       "@react-native-community/datetimepicker",

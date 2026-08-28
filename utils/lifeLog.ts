@@ -1,6 +1,12 @@
 import { format, isThisMonth, isThisWeek, parseISO } from 'date-fns';
-import type { ActiveTimer, LifeLog, LifeLogMood } from '@/store';
+import type { LifeLog, LifeLogMood } from '@/store';
 import { getCategoryById } from '@/constants/lifeLogCategories';
+export {
+  formatTimerElapsed,
+  getActiveDurationMinutes,
+  getTimerElapsedSeconds,
+  isTimerPaused,
+} from '@/utils/lifeLogTimerCore';
 
 export function calcDurationMinutes(start: string, end: string): number {
   const ms = new Date(end).getTime() - new Date(start).getTime();
@@ -17,36 +23,6 @@ export function formatDuration(minutes: number): string {
 export function formatDurationHours(minutes: number): string {
   const hours = minutes / 60;
   return hours % 1 === 0 ? `${hours}h` : `${hours.toFixed(1)}h`;
-}
-
-export function getTimerElapsedSeconds(
-  timerOrStartTime: ActiveTimer | string
-): number {
-  if (typeof timerOrStartTime === 'string') {
-    return Math.max(
-      0,
-      Math.floor((Date.now() - new Date(timerOrStartTime).getTime()) / 1000)
-    );
-  }
-  const timer = timerOrStartTime;
-  const accumulated = timer.accumulatedSeconds ?? 0;
-  if (timer.pausedAt) {
-    return accumulated;
-  }
-  const runningMs = Date.now() - new Date(timer.startTime).getTime();
-  return Math.max(0, accumulated + Math.floor(runningMs / 1000));
-}
-
-export function isTimerPaused(timer: ActiveTimer): boolean {
-  return !!timer.pausedAt;
-}
-
-export function formatTimerElapsed(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 export function getLogDateKey(log: LifeLog): string {

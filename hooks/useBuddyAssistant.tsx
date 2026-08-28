@@ -21,6 +21,7 @@ import {
   stopBuddyBackgroundSession,
 } from '@/utils/buddyBackgroundSession';
 import { useBuddyAndroidService } from '@/hooks/useBuddyAndroidService';
+import { stopLifeLogTimerForegroundService } from '@/hooks/useLifeLogTimerForegroundService';
 
 export type BuddyMode = 'off' | 'wakeListening' | 'commandListening' | 'speaking';
 
@@ -330,6 +331,8 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
       lockScreenStartingRef.current = false;
       return;
     }
+
+    await stopLifeLogTimerForegroundService();
 
     const service = await startAndroidService();
     if (!service.ok) {
