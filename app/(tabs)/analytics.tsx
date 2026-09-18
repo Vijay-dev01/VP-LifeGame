@@ -16,7 +16,7 @@ export default function AnalyticsScreen() {
   const currentMonth = useStore((s) => s.currentMonth);
   const reportRecipient = useStore((s) => s.reportRecipient);
   const resetAllData = useStore((s) => s.resetAllData);
-  const { enabled: aiEnabled, apiKey, setApiKey, toggleEnabled } = useAiSettings();
+  const { enabled: aiEnabled, apiKey, loaded: aiLoaded, setApiKey, toggleEnabled, testStatus, testError, runKeyTest } = useAiSettings();
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
 
@@ -73,6 +73,10 @@ export default function AnalyticsScreen() {
           onAiToggle={toggleEnabled}
           apiKey={apiKey}
           onApiKeyChange={(key) => void setApiKey(key)}
+          aiLoaded={aiLoaded}
+          aiTestStatus={testStatus}
+          aiTestError={testError}
+          onTestApiKey={() => void runKeyTest()}
         />
         <LifeAnalytics />
       </TabScreen>

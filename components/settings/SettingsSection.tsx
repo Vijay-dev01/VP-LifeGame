@@ -1,8 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { BuddySettingsCard } from '@/components/buddy/BuddySettingsCard';
 import { theme } from '@/constants/theme';
+import { getAiSettingsStatus } from '@/hooks/useAiSettings';
 import { useStore } from '@/store';
 
 interface SettingsSectionProps {
@@ -10,6 +11,10 @@ interface SettingsSectionProps {
   onAiToggle: () => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
+  aiLoaded: boolean;
+  aiTestStatus: 'idle' | 'testing' | 'ok' | 'error';
+  aiTestError: string | null;
+  onTestApiKey: () => void;
 }
 
 export function SettingsSection({
@@ -17,8 +22,21 @@ export function SettingsSection({
   onAiToggle,
   apiKey,
   onApiKeyChange,
+  aiLoaded,
+  aiTestStatus,
+  aiTestError,
+  onTestApiKey,
 }: SettingsSectionProps) {
   const notificationSettings = useStore((s) => s.notificationSettings);
+  const reflections = useStore((s) => s.reflections);
+  const aiStatus = getAiSettingsStatus({
+    enabled: aiEnabled,
+    apiKey,
+    loaded: aiLoaded,
+    reflectionCount: reflections.length,
+    testStatus: aiTestStatus,
+    testError: aiTestError,
+  });
   const setNotificationsEnabled = useStore((s) => s.setNotificationsEnabled);
   const setWeeklySummaryEnabled = useStore((s) => s.setWeeklySummaryEnabled);
   const setDailyNotificationLimit = useStore((s) => s.setDailyNotificationLimit);
@@ -123,15 +141,46 @@ export function SettingsSection({
           <TogglePill on={aiEnabled} onPress={onAiToggle} />
         </View>
         {aiEnabled ? (
-          <TextInput
-            style={styles.input}
-            value={apiKey}
-            onChangeText={onApiKeyChange}
-            placeholder="OpenAI API key (stored securely)"
-            placeholderTextColor={theme.textMuted}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <>
+            <Text style={styles.hint}>
+              Adds an AI coaching line under Distraction Patterns in Life Analytics. Requires
+              nightly reflections — does not power Hey Buddy voice.
+            </Text>
+            <View style={styles.aiStatusRow}>
+              <Text style={styles.aiStatusLabel}>Status</Text>
+              <Text
+                style={[
+                  styles.aiStatusValue,
+                  aiStatus.status === 'error' && styles.aiStatusError,
+                  aiStatus.status === 'ready' && styles.aiStatusReady,
+                ]}
+              >
+                {aiStatus.label}
+              </Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={apiKey}
+              onChangeText={onApiKeyChange}
+              placeholder="OpenAI API key (stored securely)"
+              placeholderTextColor={theme.textMuted}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <Pressable
+              style={[styles.testBtn, aiTestStatus === 'testing' && styles.testBtnDisabled]}
+              onPress={onTestApiKey}
+              disabled={aiTestStatus === 'testing'}
+            >
+              <Text style={styles.testBtnText}>
+                {aiTestStatus === 'testing' ? 'Testing…' : 'Test connection'}
+              </Text>
+            </Pressable>
+            {aiTestError ? <Text style={styles.aiError}>{aiTestError}</Text> : null}
+            {aiTestStatus === 'ok' ? (
+              <Text style={styles.aiSuccess}>API key verified.</Text>
+            ) : null}
+          </>
         ) : null}
       </View>
     </View>
@@ -192,5 +241,53 @@ const styles = StyleSheet.create({
   limitRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  aiStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiStatusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textMuted,
+  },
+  aiStatusValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.text,
+  },
+  aiStatusReady: {
+    color: '#22c55e',
+  },
+  aiStatusError: {
+    color: theme.accent,
+  },
+  testBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surfaceLight,
+  },
+  testBtnDisabled: {
+    opacity: 0.6,
+  },
+  testBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.text,
+  },
+  aiError: {
+    fontSize: 11,
+    color: theme.accent,
+    fontWeight: '600',
+  },
+  aiSuccess: {
+    fontSize: 11,
+    color: '#22c55e',
+    fontWeight: '600',
   },
 });

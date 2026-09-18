@@ -14,6 +14,8 @@ import { executeBuddyCommand, processBuddyTranscript } from '@/services/buddyExe
 import {
   BUDDY_CONTEXTUAL_STRINGS,
   containsWakePhrase,
+  parseBuddyCommand,
+  type BuddyCommand,
 } from '@/utils/buddyCommands';
 import { isBuddySpeaking, speakBuddy, stopBuddySpeech } from '@/utils/buddySpeech';
 import {
@@ -41,6 +43,12 @@ export interface BuddyContextValue {
 }
 
 type SpeechModule = typeof import('expo-speech-recognition');
+
+const COMMAND_LISTEN_TIMEOUT_MS = 12_000;
+
+function isActionCommand(command: BuddyCommand): boolean {
+  return command.type !== 'wake';
+}
 
 const BuddyContext = createContext<BuddyContextValue | null>(null);
 
@@ -92,6 +100,17 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
     ensureSpeechModuleReady();
   }, [ensureSpeechModuleReady]);
 
+  useEffect(() => {
+    if (!buddySettings.enabled || shouldSkipNativeVoice()) return;
+
+    void (async () => {
+      const ready = await ensureSpeechModuleReady();
+      const mod = moduleRef.current;
+      if (!ready || !mod) return;
+      await mod.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    })();
+  }, [buddySettings.enabled, ensureSpeechModuleReady]);
+
   const clearListeners = useCallback(() => {
     listenersRef.current.forEach((l) => l.remove());
     listenersRef.current = [];
@@ -110,10 +129,12 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
   const resumeAfterSpeechRef = useRef<() => void>(() => undefined);
 
   const handleCommandTranscript = useCallback(
-    (transcript: string) => {
+    (transcript: string, options?: { allowWake?: boolean }) => {
       setLastTranscript(transcript);
       stopRecognition();
-      const result = processBuddyTranscript(transcript, { allowWake: false });
+      const result = processBuddyTranscript(transcript, {
+        allowWake: options?.allowWake ?? false,
+      });
       if (!result) {
         speakBuddy("Sorry, I didn't understand that.");
         setMode('speaking');
@@ -210,7 +231,7 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
         stopRecognition();
         resumeAfterSpeechRef.current();
       }
-    }, 8000);
+    }, COMMAND_LISTEN_TIMEOUT_MS);
   }, [ensureSpeechModuleReady, handleCommandTranscript, stopRecognition]);
 
   const triggerWake = useCallback(() => {
@@ -225,66 +246,82 @@ export function BuddyProvider({ children }: { children: React.ReactNode }) {
     }, 1800);
   }, [startCommandListening, stopRecognition]);
 
-  const startWakeListening = useCallback(async () => {
-    const ready = await ensureSpeechModuleReady();
-    const mod = moduleRef.current;
-    if (!ready || !mod || shouldSkipNativeVoice()) return;
+  const startWakeListening = useCallback(
+    async (opts?: { requiresOnDevice?: boolean; isRetry?: boolean }) => {
+      const ready = await ensureSpeechModuleReady();
+      const mod = moduleRef.current;
+      if (!ready || !mod || shouldSkipNativeVoice()) return;
 
-    const available = await mod.ExpoSpeechRecognitionModule.isRecognitionAvailable();
-    if (!available) return;
+      const available = await mod.ExpoSpeechRecognitionModule.isRecognitionAvailable();
+      if (!available) return;
 
-    const perms = await mod.ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!perms.granted) {
-      setLockScreenStatus('needs-mic');
-      return;
-    }
-
-    stopRecognition();
-    setError(null);
-    setMode('wakeListening');
-    setLockScreenStatus('listening');
-    wakeTriggeredRef.current = false;
-
-    const resultSub = mod.ExpoSpeechRecognitionModule.addListener('result', (event) => {
-      const transcript = event.results?.[0]?.transcript ?? '';
-      if (!transcript) return;
-      if (containsWakePhrase(transcript)) {
-        triggerWake();
+      const perms = await mod.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perms.granted) {
+        setLockScreenStatus('needs-mic');
+        setError('Microphone permission required');
         return;
       }
-      if (event.isFinal && containsWakePhrase(transcript)) {
-        triggerWake();
-      }
-    });
 
-    const errSub = mod.ExpoSpeechRecognitionModule.addListener('error', () => {
       stopRecognition();
-      setMode('off');
-      scheduleWakeListenRetry();
-    });
+      setError(null);
+      setMode('wakeListening');
+      setLockScreenStatus('listening');
+      wakeTriggeredRef.current = false;
 
-    const endSub = mod.ExpoSpeechRecognitionModule.addListener('end', () => {
-      const settings = useStore.getState().buddySettings;
-      if (
-        settings.enabled &&
-        settings.lockScreenListen &&
-        modeRef.current === 'wakeListening' &&
-        !isBuddySpeaking()
-      ) {
-        scheduleWakeListenRetry(500);
-      }
-    });
+      const requiresOnDevice =
+        opts?.requiresOnDevice ?? (Platform.OS === 'android');
 
-    listenersRef.current = [resultSub, errSub, endSub];
+      const resultSub = mod.ExpoSpeechRecognitionModule.addListener('result', (event) => {
+        const transcript = event.results?.[0]?.transcript?.trim() ?? '';
+        if (!transcript || !containsWakePhrase(transcript)) return;
 
-    mod.ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      continuous: true,
-      interimResults: true,
-      requiresOnDeviceRecognition: Platform.OS === 'android',
-      contextualStrings: BUDDY_CONTEXTUAL_STRINGS,
-    });
-  }, [ensureSpeechModuleReady, scheduleWakeListenRetry, stopRecognition, triggerWake]);
+        const parsed = parseBuddyCommand(transcript, { allowWake: true });
+        if (!parsed) return;
+
+        if (isActionCommand(parsed) && event.isFinal) {
+          handleCommandTranscript(transcript, { allowWake: true });
+          return;
+        }
+
+        if (parsed.type === 'wake' && event.isFinal) {
+          triggerWake();
+        }
+      });
+
+      const errSub = mod.ExpoSpeechRecognitionModule.addListener('error', () => {
+        stopRecognition();
+        setMode('off');
+        if (Platform.OS === 'android' && requiresOnDevice && !opts?.isRetry) {
+          void startWakeListening({ requiresOnDevice: false, isRetry: true });
+          return;
+        }
+        scheduleWakeListenRetry();
+      });
+
+      const endSub = mod.ExpoSpeechRecognitionModule.addListener('end', () => {
+        const settings = useStore.getState().buddySettings;
+        if (
+          settings.enabled &&
+          settings.lockScreenListen &&
+          modeRef.current === 'wakeListening' &&
+          !isBuddySpeaking()
+        ) {
+          scheduleWakeListenRetry(500);
+        }
+      });
+
+      listenersRef.current = [resultSub, errSub, endSub];
+
+      mod.ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        continuous: true,
+        interimResults: true,
+        requiresOnDeviceRecognition: Platform.OS === 'android' ? requiresOnDevice : undefined,
+        contextualStrings: BUDDY_CONTEXTUAL_STRINGS,
+      });
+    },
+    [ensureSpeechModuleReady, handleCommandTranscript, scheduleWakeListenRetry, stopRecognition, triggerWake]
+  );
 
   useEffect(() => {
     startWakeListeningRef.current = startWakeListening;

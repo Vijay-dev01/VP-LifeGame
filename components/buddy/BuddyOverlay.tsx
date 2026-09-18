@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { useBuddyOptional } from '@/hooks/useBuddyAssistant';
@@ -9,9 +10,29 @@ const FAB_CLEARANCE = 72;
 
 export const BuddyOverlay = memo(function BuddyOverlay() {
   const buddy = useBuddyOptional();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  if (!buddy?.enabled) return null;
+  const bottom = TAB_BAR_HEIGHT + insets.bottom + 8;
+
+  if (!buddy) return null;
+
+  if (!buddy.enabled) {
+    return (
+      <View style={[styles.wrap, { bottom, left: 12 }]} pointerEvents="box-none">
+        <Pressable
+          style={({ pressed }) => [styles.disabledBlock, pressed && styles.pressed]}
+          onPress={() => router.push('/(tabs)/analytics')}
+          accessibilityLabel="Enable Hey Buddy in Analytics"
+          accessibilityRole="button"
+          hitSlop={12}
+        >
+          <Text style={styles.iconOnlyDim}>🤖</Text>
+          <Text style={styles.disabledHint}>Enable Hey Buddy in Analytics</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   const active =
     buddy.mode === 'commandListening' ||
@@ -22,8 +43,6 @@ export const BuddyOverlay = memo(function BuddyOverlay() {
     buddy.lockScreenStatusLabel && buddy.lockScreenStatus !== 'off'
       ? buddy.lockScreenStatusLabel
       : buddy.statusLabel;
-
-  const bottom = TAB_BAR_HEIGHT + insets.bottom + 8;
 
   const feedbackBlock = (
     <>
@@ -68,6 +87,7 @@ export const BuddyOverlay = memo(function BuddyOverlay() {
           >
             <Text style={styles.iconOnly}>🤖</Text>
           </Pressable>
+          <Text style={styles.idleHint}>{buddy.statusLabel}</Text>
           {feedbackBlock}
         </View>
       )}
@@ -87,6 +107,29 @@ const styles = StyleSheet.create({
   },
   idleBlock: {
     alignItems: 'flex-start',
+  },
+  disabledBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+    opacity: 0.85,
+    maxWidth: 220,
+  },
+  iconOnlyDim: {
+    fontSize: 16,
+    opacity: 0.6,
+  },
+  disabledHint: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textMuted,
   },
   iconBtn: {
     width: 40,
@@ -108,6 +151,12 @@ const styles = StyleSheet.create({
   },
   iconOnly: {
     fontSize: 16,
+  },
+  idleHint: {
+    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.textMuted,
   },
   pill: {
     flexDirection: 'row',

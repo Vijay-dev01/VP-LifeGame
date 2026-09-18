@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLifeAnalytics } from '@/hooks/useLifeAnalytics';
 import { getCategoryById } from '@/constants/lifeLogCategories';
 import { theme } from '@/constants/theme';
@@ -23,14 +23,23 @@ export function LifeAnalytics() {
   const reflections = useStore((s) => s.reflections);
   const aiEnabled = useStore((s) => s.aiSettings.enabled);
   const reflectionInsight = computeReflectionInsights(reflections);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!aiEnabled) {
-      setAiInsight(null);
+      setAiText(null);
+      setAiError(null);
+      setAiLoading(false);
+      setHasApiKey(null);
       return;
     }
+
+    setAiLoading(true);
+    setAiError(null);
 
     const timer = setTimeout(() => {
       abortRef.current?.abort();
@@ -38,9 +47,29 @@ export function LifeAnalytics() {
       abortRef.current = controller;
 
       getSecureApiKey().then((apiKey) => {
-        if (!apiKey || controller.signal.aborted) return;
+        if (controller.signal.aborted) return;
+
+        setHasApiKey(!!apiKey.trim());
+
+        if (!apiKey.trim()) {
+          setAiText(null);
+          setAiError(null);
+          setAiLoading(false);
+          return;
+        }
+
+        if (reflections.length === 0) {
+          setAiText(null);
+          setAiError(null);
+          setAiLoading(false);
+          return;
+        }
+
         fetchAiDistractionInsight(apiKey, reflections, controller.signal).then((result) => {
-          if (!controller.signal.aborted) setAiInsight(result);
+          if (controller.signal.aborted) return;
+          setAiText(result.text);
+          setAiError(result.error);
+          setAiLoading(false);
         });
       });
     }, 500);
@@ -50,6 +79,16 @@ export function LifeAnalytics() {
       abortRef.current?.abort();
     };
   }, [aiEnabled, reflections]);
+
+  const aiCoachingMessage = (() => {
+    if (!aiEnabled) return null;
+    if (hasApiKey === false) return 'Add your OpenAI key in Analytics Settings.';
+    if (reflections.length === 0) return 'Complete nightly reflections to unlock AI coaching.';
+    if (aiLoading) return null;
+    if (aiError) return aiError;
+    if (aiText) return aiText;
+    return 'AI coaching will appear here after your next reflection update.';
+  })();
 
   return (
     <View style={styles.card}>
@@ -120,9 +159,25 @@ export function LifeAnalytics() {
           <View style={styles.insightCard}>
             <Text style={styles.insightText}>{formatReflectionInsight(reflectionInsight)}</Text>
           </View>
-          {aiInsight ? (
-            <View style={styles.insightCard}>
-              <Text style={styles.insightText}>{aiInsight}</Text>
+        </View>
+      ) : null}
+
+      {aiEnabled ? (
+        <View style={styles.insights}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.breakdownTitle}>AI COACHING</Text>
+            <View style={styles.aiBadge}>
+              <Text style={styles.aiBadgeText}>AI on</Text>
+            </View>
+          </View>
+          {aiLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={theme.accent} />
+              <Text style={styles.loadingText}>Loading coaching…</Text>
+            </View>
+          ) : aiCoachingMessage ? (
+            <View style={[styles.insightCard, aiError ? styles.insightCardError : null]}>
+              <Text style={styles.insightText}>{aiCoachingMessage}</Text>
             </View>
           ) : null}
         </View>
@@ -130,7 +185,14 @@ export function LifeAnalytics() {
 
       {insights.length > 0 ? (
         <View style={styles.insights}>
-          <Text style={styles.breakdownTitle}>INSIGHTS</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.breakdownTitle}>INSIGHTS</Text>
+            {aiEnabled ? (
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>AI on</Text>
+              </View>
+            ) : null}
+          </View>
           {insights.map((msg, i) => (
             <View key={i} style={styles.insightCard}>
               <Text style={styles.insightText}>{msg}</Text>
@@ -205,6 +267,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 8,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  aiBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(220,38,38,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.3)',
+  },
+  aiBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: theme.accent,
+    letterSpacing: 0.3,
+  },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -244,6 +326,7 @@ const styles = StyleSheet.create({
   },
   insights: {
     gap: 6,
+    marginTop: 4,
   },
   insightCard: {
     backgroundColor: 'rgba(220,38,38,0.08)',
@@ -252,9 +335,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
   },
+  insightCardError: {
+    backgroundColor: 'rgba(220,38,38,0.12)',
+    borderColor: 'rgba(220,38,38,0.35)',
+  },
   insightText: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.text,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: theme.textMuted,
+    fontWeight: '600',
   },
 });
