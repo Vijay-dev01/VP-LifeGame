@@ -29,7 +29,7 @@ const LEARNING_SUGGESTIONS: ContextSuggestion[] = [
   { label: 'Walk', category: 'health', title: 'walking' },
 ];
 
-const DEFAULT_SUGGESTIONS: ContextSuggestion[] = [
+export const DEFAULT_SUGGESTIONS: ContextSuggestion[] = [
   { label: 'Take Break', category: 'recovery', title: 'break' },
   { label: 'Walk', category: 'health', title: 'walking' },
 ];

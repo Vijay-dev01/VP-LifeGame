@@ -24,6 +24,7 @@ export function HabitBreakdown() {
               habit.id,
               completions,
               currentMonth,
+              habit.activeDays,
             );
             return (
               <View key={habit.id} style={styles.row}>

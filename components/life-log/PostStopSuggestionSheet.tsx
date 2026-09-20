@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { ContextSuggestion } from '@/constants/contextSuggestions';
+import { AddNextItemForm } from '@/components/life-log/AddNextItemForm';
+import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 
 interface PostStopSuggestionSheetProps {
@@ -18,16 +20,38 @@ export function PostStopSuggestionSheet({
   onSelect,
   onDismiss,
 }: PostStopSuggestionSheetProps) {
+  const customNextItems = useStore((s) => s.customNextItems);
+  const [adding, setAdding] = useState(false);
+
+  const customs: ContextSuggestion[] = customNextItems.map((item) => ({
+    label: item.title,
+    category: item.category,
+    title: item.title,
+  }));
+  const seen = new Set(customs.map((c) => c.title.trim().toLowerCase()));
+  const merged = [
+    ...customs,
+    ...suggestions.filter((s) => !seen.has(s.title.trim().toLowerCase())),
+  ];
+
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
       <Pressable style={styles.overlay} onPress={onDismiss}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>Nice work on {activityTitle}</Text>
-          <Text style={styles.subtitle}>What&apos;s next?</Text>
+          <View style={styles.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Nice work on {activityTitle}</Text>
+              <Text style={styles.subtitle}>What&apos;s next?</Text>
+            </View>
+            <Pressable style={styles.addIcon} onPress={() => setAdding((v) => !v)}>
+              <Text style={styles.addIconText}>{adding ? '×' : '+'}</Text>
+            </Pressable>
+          </View>
+          {adding ? <AddNextItemForm onAdded={() => setAdding(false)} /> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {suggestions.map((s) => (
+            {merged.map((s, i) => (
               <Pressable
-                key={s.label}
+                key={`${s.label}-${i}`}
                 style={styles.chip}
                 onPress={() => {
                   onSelect(s.category, s.title);
@@ -62,6 +86,11 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 32,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   title: {
     fontSize: 16,
     fontWeight: '800',
@@ -73,9 +102,25 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 4,
   },
+  addIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addIconText: {
+    color: theme.accent,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
   row: {
     gap: 8,
     paddingBottom: 12,
+    paddingTop: 8,
   },
   chip: {
     backgroundColor: theme.surfaceLight,

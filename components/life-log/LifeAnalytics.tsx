@@ -1,13 +1,49 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLifeAnalytics } from '@/hooks/useLifeAnalytics';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { useResolvedCategory } from '@/hooks/useResolvedCategories';
 import { theme } from '@/constants/theme';
 import { formatDurationHours } from '@/utils/lifeLog';
 import { useStore } from '@/store';
 import { computeReflectionInsights, formatReflectionInsight } from '@/utils/reflectionInsights';
 import { fetchAiDistractionInsight } from '@/utils/aiInsights';
 import { getSecureApiKey } from '@/utils/secureAiKey';
+
+function TopCategoryLine({ categoryId }: { categoryId: string }) {
+  const cat = useResolvedCategory(categoryId);
+  return <Text style={styles.subStat}>Top category: {cat?.label ?? '—'}</Text>;
+}
+
+function BreakdownRow({
+  categoryId,
+  percent,
+}: {
+  categoryId: string;
+  percent: number;
+}) {
+  const cat = useResolvedCategory(categoryId);
+  return (
+    <View style={styles.barRow}>
+      <Text style={styles.barName} numberOfLines={1}>
+        {cat?.label ?? categoryId}
+      </Text>
+      <View style={styles.barWrap}>
+        <View style={styles.barBg}>
+          <View
+            style={[
+              styles.barFill,
+              {
+                width: `${percent}%`,
+                backgroundColor: cat?.color ?? theme.accent,
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.barPct}>{percent}%</Text>
+      </View>
+    </View>
+  );
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -117,39 +153,20 @@ export function LifeAnalytics() {
           Daily activities: {metrics.avgDailyActivityCount}
         </Text>
         {metrics.mostUsedCategory ? (
-          <Text style={styles.subStat}>
-            Top category: {getCategoryById(metrics.mostUsedCategory)?.label ?? '—'}
-          </Text>
+          <TopCategoryLine categoryId={metrics.mostUsedCategory} />
         ) : null}
       </View>
 
       {metrics.categoryBreakdown.length > 0 ? (
         <View style={styles.breakdown}>
           <Text style={styles.breakdownTitle}>CATEGORY BREAKDOWN</Text>
-          {metrics.categoryBreakdown.slice(0, 6).map((item) => {
-            const cat = getCategoryById(item.categoryId);
-            return (
-              <View key={item.categoryId} style={styles.barRow}>
-                <Text style={styles.barName} numberOfLines={1}>
-                  {cat?.label ?? item.categoryId}
-                </Text>
-                <View style={styles.barWrap}>
-                  <View style={styles.barBg}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        {
-                          width: `${item.percent}%`,
-                          backgroundColor: cat?.color ?? theme.accent,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.barPct}>{item.percent}%</Text>
-                </View>
-              </View>
-            );
-          })}
+          {metrics.categoryBreakdown.slice(0, 6).map((item) => (
+            <BreakdownRow
+              key={item.categoryId}
+              categoryId={item.categoryId}
+              percent={item.percent}
+            />
+          ))}
         </View>
       ) : null}
 

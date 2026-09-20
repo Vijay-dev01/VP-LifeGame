@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { format } from 'date-fns';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { useResolvedCategory } from '@/hooks/useResolvedCategories';
 import { theme } from '@/constants/theme';
 import { useStore, type DayPlanItem } from '@/store';
 import { formatPlanTime } from '@/utils/formatPlanTime';
@@ -23,7 +23,7 @@ const PlanItemRow = memo(function PlanItemRow({
   onStart: (category: string, title: string) => void;
   onToggleDone: (id: string) => void;
 }) {
-  const cat = getCategoryById(item.category);
+  const cat = useResolvedCategory(item.category);
 
   const handlePress = () => {
     if (item.done) return;

@@ -9,8 +9,10 @@ import {
   Moon,
   PlayCircle,
   Settings,
+  Tag,
   Users,
 } from 'lucide-react-native';
+import type { CustomLifeLogCategory } from '@/store';
 
 export interface LifeLogCategory {
   id: string;
@@ -103,8 +105,46 @@ export function getCategoryById(id: string): LifeLogCategory | undefined {
   return LIFE_LOG_CATEGORIES.find((c) => c.id === id);
 }
 
-export function getDefaultTitleForCategory(categoryId: string): string {
-  const cat = getCategoryById(categoryId);
+export const CUSTOM_CATEGORY_COLORS = [
+  '#3b82f6',
+  '#22c55e',
+  '#a855f7',
+  '#f97316',
+  '#ec4899',
+  '#eab308',
+  '#14b8a6',
+  '#6366f1',
+];
+
+export function customToLifeLogCategory(custom: CustomLifeLogCategory): LifeLogCategory {
+  return {
+    id: custom.id,
+    label: custom.label,
+    color: custom.color,
+    icon: Tag,
+    examples: [custom.label],
+  };
+}
+
+export function resolveCategory(
+  id: string,
+  customs: CustomLifeLogCategory[] = []
+): LifeLogCategory | undefined {
+  return (
+    getCategoryById(id) ??
+    customs.filter((c) => c.id === id).map(customToLifeLogCategory)[0]
+  );
+}
+
+export function mergeCategories(customs: CustomLifeLogCategory[] = []): LifeLogCategory[] {
+  return [...LIFE_LOG_CATEGORIES, ...customs.map(customToLifeLogCategory)];
+}
+
+export function getDefaultTitleForCategory(
+  categoryId: string,
+  customs: CustomLifeLogCategory[] = []
+): string {
+  const cat = resolveCategory(categoryId, customs);
   if (!cat) return 'Activity';
   return cat.examples[0] ?? cat.label;
 }

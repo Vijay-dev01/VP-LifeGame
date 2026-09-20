@@ -1,13 +1,5 @@
-import React, { useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addDays, format } from 'date-fns';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -36,6 +28,10 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
 
   const tomorrowLabel = format(addDays(new Date(), 1), 'EEEE');
 
+  useEffect(() => {
+    if (!visible) setShowTimePicker(false);
+  }, [visible]);
+
   const handleAdd = () => {
     if (!title.trim()) return;
     addPlanItem(tomorrow, {
@@ -48,83 +44,115 @@ export function PlanTomorrowSheet({ visible, onClose }: PlanTomorrowSheetProps) 
 
   return (
     <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheet}>
-          <Text style={styles.heading}>Plan Tomorrow</Text>
-          <Text style={styles.dateLabel}>{format(addDays(new Date(), 1), 'EEEE, MMM d')}</Text>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.body}
+      >
+        <Text style={styles.heading}>Plan Tomorrow</Text>
+        <Text style={styles.dateLabel}>{format(addDays(new Date(), 1), 'EEEE, MMM d')}</Text>
 
-          {items.length > 0 ? (
-            <Text style={styles.savedHint}>
-              {items.length} {items.length === 1 ? 'activity' : 'activities'} planned for{' '}
-              {tomorrowLabel}
-            </Text>
-          ) : null}
+        {items.length > 0 ? (
+          <Text style={styles.savedHint}>
+            {items.length} {items.length === 1 ? 'activity' : 'activities'} planned for{' '}
+            {tomorrowLabel}
+          </Text>
+        ) : null}
 
-          <View style={styles.goalRow}>
-            <Text style={styles.goalLabel}>Goal: Reach {dailyGoalScore} Score</Text>
-            <View style={styles.goalBtns}>
-              <Pressable style={styles.goalBtn} onPress={() => setDailyGoalScore(dailyGoalScore - 5)}>
-                <Text style={styles.goalBtnText}>−</Text>
-              </Pressable>
-              <Pressable style={styles.goalBtn} onPress={() => setDailyGoalScore(dailyGoalScore + 5)}>
-                <Text style={styles.goalBtnText}>+</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <ScrollView style={styles.list}>
-            {items.map((item) => (
-              <View key={item.id} style={styles.planItem}>
-                <Text style={styles.planTime}>{item.time}</Text>
-                <Text style={styles.planTitle}>{item.title}</Text>
-                <Pressable onPress={() => removePlanItem(tomorrow, item.id)}>
-                  <Text style={styles.remove}>×</Text>
-                </Pressable>
-              </View>
-            ))}
-          </ScrollView>
-
-          <View style={styles.addRow}>
-            <Pressable style={styles.timePick} onPress={() => setShowTimePicker(true)}>
-              <Text style={styles.timePickText}>{format(time, 'h:mm a')}</Text>
+        <View style={styles.goalRow}>
+          <Text style={styles.goalLabel}>Goal: Reach {dailyGoalScore} Score</Text>
+          <View style={styles.goalBtns}>
+            <Pressable style={styles.goalBtn} onPress={() => setDailyGoalScore(dailyGoalScore - 5)}>
+              <Text style={styles.goalBtnText}>−</Text>
             </Pressable>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Activity"
-              placeholderTextColor={theme.textMuted}
-            />
-            <Pressable style={styles.addBtn} onPress={handleAdd}>
-              <Text style={styles.addBtnText}>+</Text>
+            <Pressable style={styles.goalBtn} onPress={() => setDailyGoalScore(dailyGoalScore + 5)}>
+              <Text style={styles.goalBtnText}>+</Text>
             </Pressable>
           </View>
+        </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catRow}>
-            {LIFE_LOG_CATEGORIES.slice(0, 5).map((cat) => (
-              <Pressable
-                key={cat.id}
-                style={[styles.catChip, category === cat.id && styles.catChipOn]}
-                onPress={() => setCategory(cat.id)}
-              >
-                <Text style={styles.catChipText}>{cat.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+        {items.map((item) => (
+          <View key={item.id} style={styles.planItem}>
+            <Text style={styles.planTime}>{item.time}</Text>
+            <Text style={styles.planTitle}>{item.title}</Text>
+            <Pressable onPress={() => removePlanItem(tomorrow, item.id)}>
+              <Text style={styles.remove}>×</Text>
+            </Pressable>
+          </View>
+        ))}
 
-          {showTimePicker && (
+        <View style={styles.addRow}>
+          <Pressable style={styles.timePick} onPress={() => setShowTimePicker(true)}>
+            <Text style={styles.timePickText}>{format(time, 'h:mm a')}</Text>
+          </Pressable>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Activity"
+            placeholderTextColor={theme.textMuted}
+          />
+          <Pressable style={styles.addBtn} onPress={handleAdd}>
+            <Text style={styles.addBtnText}>+</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.catRow}
+          contentContainerStyle={styles.catRowContent}
+        >
+          {LIFE_LOG_CATEGORIES.slice(0, 5).map((cat) => (
+            <Pressable
+              key={cat.id}
+              style={[styles.catChip, category === cat.id && styles.catChipOn]}
+              onPress={() => setCategory(cat.id)}
+            >
+              <Text style={styles.catChipText}>{cat.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {showTimePicker && Platform.OS === 'ios' ? (
+          <View style={styles.iosPicker}>
             <DateTimePicker
               value={time}
               mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              display="spinner"
               onChange={(_, date) => {
-                setShowTimePicker(Platform.OS === 'ios');
                 if (date) setTime(date);
               }}
             />
-          )}
+            <Pressable style={styles.pickerDone} onPress={() => setShowTimePicker(false)}>
+              <Text style={styles.pickerDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-          <Pressable style={styles.doneBtn} onPress={onClose}>
-            <Text style={styles.doneText}>Done</Text>
-          </Pressable>
+        {showTimePicker && Platform.OS !== 'ios' ? (
+          <DateTimePicker
+            value={time}
+            mode="time"
+            display="default"
+            onChange={(_, date) => {
+              setShowTimePicker(false);
+              if (date) setTime(date);
+            }}
+          />
+        ) : null}
+
+        <Pressable
+          style={styles.doneBtn}
+          onPress={() => {
+            Keyboard.dismiss();
+            setShowTimePicker(false);
+            onClose();
+          }}
+        >
+          <Text style={styles.doneText}>Done</Text>
+        </Pressable>
+      </ScrollView>
     </BottomSheet>
   );
 }
@@ -133,6 +161,9 @@ const styles = StyleSheet.create({
   sheet: {
     borderWidth: 1,
     borderColor: theme.border,
+  },
+  body: {
+    paddingBottom: 8,
   },
   heading: {
     fontSize: 18,
@@ -179,10 +210,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
   },
-  list: {
-    maxHeight: 160,
-    marginBottom: 12,
-  },
   planItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -211,6 +238,7 @@ const styles = StyleSheet.create({
   addRow: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 12,
     marginBottom: 10,
   },
   timePick: {
@@ -249,6 +277,12 @@ const styles = StyleSheet.create({
   },
   catRow: {
     marginBottom: 14,
+    minHeight: 36,
+    flexGrow: 0,
+  },
+  catRowContent: {
+    alignItems: 'center',
+    paddingRight: 8,
   },
   catChip: {
     borderWidth: 1,
@@ -266,6 +300,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: theme.text,
+  },
+  iosPicker: {
+    marginBottom: 12,
+  },
+  pickerDone: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  pickerDoneText: {
+    color: theme.accent,
+    fontWeight: '700',
   },
   doneBtn: {
     backgroundColor: theme.accent,

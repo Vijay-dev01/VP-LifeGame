@@ -7,7 +7,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { useResolvedCategory } from '@/hooks/useResolvedCategories';
 import { theme } from '@/constants/theme';
 import { formatElapsed } from '@/hooks/useTimer';
 
@@ -28,7 +28,7 @@ export function ActiveTimerBar({
   onStop,
   onTogglePause,
 }: ActiveTimerBarProps) {
-  const cat = getCategoryById(categoryId);
+  const cat = useResolvedCategory(categoryId);
   const pulse = useSharedValue(1);
 
   useEffect(() => {

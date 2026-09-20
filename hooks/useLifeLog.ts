@@ -8,7 +8,7 @@ import {
 } from 'date-fns';
 import { useStore, type LifeLog, type LifeLogIntent, type LifeLogMood } from '@/store';
 import { parseActivityKey, sortLogsByStartDesc, sumDuration } from '@/utils/lifeLog';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { resolveCategory } from '@/constants/lifeLogCategories';
 
 export interface LifeLogFilters {
   category: string | null;
@@ -50,7 +50,9 @@ function applyFilters(logs: LifeLog[], filters: LifeLogFilters): LifeLog[] {
       (l) =>
         l.title.toLowerCase().includes(q) ||
         (l.notes?.toLowerCase().includes(q) ?? false) ||
-        (getCategoryById(l.category)?.label.toLowerCase().includes(q) ?? false)
+        (resolveCategory(l.category, useStore.getState().customLifeLogCategories)?.label
+          .toLowerCase()
+          .includes(q) ?? false)
     );
   }
   return result;
@@ -82,6 +84,7 @@ export function useLifeLog() {
   const logs = useStore((s) => s.lifeLogs);
   const recentActivityKeys = useStore((s) => s.recentActivityKeys);
   const dayPlans = useStore((s) => s.dayPlans);
+  const customNextItems = useStore((s) => s.customNextItems);
   const addLifeLog = useStore((s) => s.addLifeLog);
   const updateLifeLog = useStore((s) => s.updateLifeLog);
   const deleteLifeLog = useStore((s) => s.deleteLifeLog);
@@ -153,11 +156,22 @@ export function useLifeLog() {
     return {
       suggestedNext: ruleCats.slice(0, 3).map((cat) => ({
         category: cat,
-        title: getCategoryById(cat)?.examples[0] ?? cat,
+        title:
+          resolveCategory(cat, useStore.getState().customLifeLogCategories)?.examples[0] ?? cat,
       })),
       suggestionsFromPlan: false,
     };
   }, [sortedLogs, dayPlans, today]);
+
+  const mergedSuggestedNext = useMemo(() => {
+    const customs = customNextItems.map((item) => ({
+      category: item.category,
+      title: item.title,
+    }));
+    const seen = new Set(customs.map((c) => c.title.trim().toLowerCase()));
+    const rest = suggestedNext.filter((s) => !seen.has(s.title.trim().toLowerCase()));
+    return [...customs, ...rest];
+  }, [customNextItems, suggestedNext]);
 
   const updateFilter = useCallback(
     <K extends keyof LifeLogFilters>(key: K, value: LifeLogFilters[K]) => {
@@ -184,7 +198,7 @@ export function useLifeLog() {
     todayTotalMinutes,
     dayTotals,
     recentActivities,
-    suggestedNext,
+    suggestedNext: mergedSuggestedNext,
     suggestionsFromPlan,
     filters,
     updateFilter,

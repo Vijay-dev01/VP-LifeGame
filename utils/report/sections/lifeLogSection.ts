@@ -3,7 +3,8 @@ import { renderDonutChart } from '../charts';
 import type { ReportData } from '../reportData';
 import { formatDuration, formatDurationHours } from '../reportData';
 import { esc, sectionHeader } from '../reportTheme';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { resolveCategory } from '@/constants/lifeLogCategories';
+import { useStore } from '@/store';
 import { MOOD_EMOJI } from '@/utils/lifeLog';
 
 export function renderLifeLogSection(data: ReportData): string {
@@ -21,7 +22,9 @@ export function renderLifeLogSection(data: ReportData): string {
 
   const activityRows = data.activityLogs
     .map((log) => {
-      const cat = getCategoryById(log.category)?.label ?? log.category;
+      const cat =
+        resolveCategory(log.category, useStore.getState().customLifeLogCategories)?.label ??
+        log.category;
       const time = format(parseISO(log.startTime), 'MMM d, h:mm a');
       const mood = log.mood ? MOOD_EMOJI[log.mood] : '—';
       return `
@@ -44,7 +47,7 @@ export function renderLifeLogSection(data: ReportData): string {
       <tr>
         <td>${esc(format(parseISO(log.startTime), 'dd MMM'))}</td>
         <td>${esc(log.title)}</td>
-        <td>${esc(getCategoryById(log.category)?.label ?? log.category)}</td>
+        <td>${esc(resolveCategory(log.category, useStore.getState().customLifeLogCategories)?.label ?? log.category)}</td>
         <td class="num">${esc(formatDuration(log.duration))}</td>
       </tr>`
     )

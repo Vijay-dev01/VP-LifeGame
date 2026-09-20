@@ -8,10 +8,11 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { Trash2 } from 'lucide-react-native';
+import { Pencil, Trash2 } from 'lucide-react-native';
 import { addDays, startOfMonth, endOfMonth, getDate, format, isSameDay } from 'date-fns';
-import { useStore } from '@/store';
+import { useStore, type Habit } from '@/store';
 import { theme } from '@/constants/theme';
+import { isHabitScheduledOn } from '@/utils/habitSchedule';
 
 const CELL = 38;
 const LABEL_W = 140;
@@ -24,11 +25,13 @@ const HabitCell = memo(function HabitCell({
   dateStr,
   date,
   isToday,
+  scheduled,
 }: {
   habitId: string;
   dateStr: string;
   date: Date;
   isToday: boolean;
+  scheduled: boolean;
 }) {
   const checked = useStore(
     (s) => (s.completions[dateStr] ?? []).includes(habitId)
@@ -36,12 +39,14 @@ const HabitCell = memo(function HabitCell({
   const toggleHabitDay = useStore((s) => s.toggleHabitDay);
   return (
     <Pressable
+      disabled={!scheduled}
       style={[
         styles.cell,
         styles.dayCell,
         isToday && styles.todayCell,
+        !scheduled && styles.restCell,
       ]}
-      onPress={() => toggleHabitDay(habitId, dateStr)}
+      onPress={() => scheduled && toggleHabitDay(habitId, dateStr)}
     >
       <View
         style={[
@@ -58,7 +63,7 @@ const HabitCell = memo(function HabitCell({
   );
 });
 
-export function HabitGrid() {
+export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => void }) {
   const currentMonth = useStore((s) => s.currentMonth);
   const habits = useStore((s) => s.habits);
   const deleteHabit = useStore((s) => s.deleteHabit);
@@ -132,6 +137,7 @@ export function HabitGrid() {
                     const { x, y } = e.nativeEvent.layout;
                     habitLabelLayouts.current[habit.id] = { x, y };
                   }}
+                  onPress={() => onEditHabit?.(habit)}
                   onLongPress={() => {
                     const layout = habitLabelLayouts.current[habit.id];
                     if (!layout) return;
@@ -167,6 +173,13 @@ export function HabitGrid() {
                   >
                     {habit.emoji} {habit.name}
                   </Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => onEditHabit?.(habit)}
+                  style={styles.deleteBtn}
+                >
+                  <Pencil size={16} color={theme.textMuted} />
                 </Pressable>
                 <Pressable
                   hitSlop={8}
@@ -247,6 +260,7 @@ export function HabitGrid() {
                       dateStr={format(d, 'yyyy-MM-dd')}
                       date={d}
                       isToday={isSameDay(d, today)}
+                      scheduled={isHabitScheduledOn(habit.activeDays, format(d, 'yyyy-MM-dd'))}
                     />
                   ))}
                 </View>
@@ -329,6 +343,9 @@ const styles = StyleSheet.create({
   },
   todayCell: {
     backgroundColor: 'rgba(220, 38, 38, 0.15)',
+  },
+  restCell: {
+    opacity: 0.32,
   },
   headerText: {
     fontSize: 11,

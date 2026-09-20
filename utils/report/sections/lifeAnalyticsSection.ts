@@ -1,4 +1,5 @@
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { resolveCategory } from '@/constants/lifeLogCategories';
+import { useStore } from '@/store';
 import type { ReportData } from '../reportData';
 import { formatDurationHours } from '../reportData';
 import { esc, sectionHeader, statCard } from '../reportTheme';
@@ -9,7 +10,7 @@ export function renderLifeAnalyticsSection(data: ReportData): string {
   const categoryBars = m.categoryBreakdown
     .slice(0, 8)
     .map((item) => {
-      const cat = getCategoryById(item.categoryId);
+      const cat = resolveCategory(item.categoryId, useStore.getState().customLifeLogCategories);
       const color = cat?.color ?? '#dc2626';
       return `
       <div class="bar-row">
@@ -38,7 +39,8 @@ export function renderLifeAnalyticsSection(data: ReportData): string {
     .join('');
 
   const topCat = m.mostUsedCategory
-    ? getCategoryById(m.mostUsedCategory)?.label ?? m.mostUsedCategory
+    ? resolveCategory(m.mostUsedCategory, useStore.getState().customLifeLogCategories)?.label ??
+      m.mostUsedCategory
     : '—';
 
   return `

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Header } from '@/components/Header';
 import { XPBadge } from '@/components/XPBadge';
 import { FloatingAddButton } from '@/components/life-log/FloatingAddButton';
@@ -63,11 +63,16 @@ export default function LifeLogScreen() {
   const [lastXpEarned, setLastXpEarned] = useState(0);
 
   useEffect(() => {
-    if (params.action === 'stop' || pendingStopFromNotification) {
+    const action = params.action;
+    if (action === 'stop' || pendingStopFromNotification) {
       if (isRunning) setStopModalOpen(true);
       setPendingStopFromNotification(false);
+      if (action === 'stop') router.setParams({ action: undefined });
     }
-    if (params.action === 'plan') setShowPlan(true);
+    if (action === 'plan') {
+      setShowPlan(true);
+      router.setParams({ action: undefined });
+    }
   }, [params.action, pendingStopFromNotification, isRunning, setPendingStopFromNotification, setShowPlan]);
 
   const handleQuickStart = (categoryId: string) => {
@@ -92,7 +97,8 @@ export default function LifeLogScreen() {
 
   const handleStopSave = (data: Parameters<typeof stop>[0]) => {
     const timer = activeTimer;
-    const xp = timer ? calcActivityXp(timer.category, data?.title ?? timer.title) : 0;
+    const category = data?.category ?? timer?.category;
+    const xp = timer ? calcActivityXp(category ?? timer.category, data?.title ?? timer.title) : 0;
     const id = stop(data);
     setStopModalOpen(false);
     if (!id) {
@@ -101,7 +107,7 @@ export default function LifeLogScreen() {
     }
     if (timer) {
       setLastStoppedTitle(data?.title ?? timer.title);
-      setPostStopSuggestions(getPostStopSuggestions(timer.category, timer.title));
+      setPostStopSuggestions(getPostStopSuggestions(category ?? timer.category, data?.title ?? timer.title));
       setLastXpEarned(xp);
       setPostStopOpen(true);
     }
@@ -154,6 +160,7 @@ export default function LifeLogScreen() {
             onSelect={handleResume}
             disabled={isRunning}
             title={suggestionsFromPlan ? 'UP NEXT FROM YOUR PLAN' : 'SUGGESTED NEXT'}
+            defaultCategory={suggestedNext[0]?.category ?? 'deep-work'}
           />
 
           <LifeLogFiltersBar filters={filters} onUpdate={updateFilter} onClear={clearFilters} />
@@ -165,6 +172,7 @@ export default function LifeLogScreen() {
       <StopTimerModal
         visible={stopModalOpen}
         defaultTitle={activeTimer?.title ?? ''}
+        defaultCategory={activeTimer?.category ?? 'deep-work'}
         onSave={handleStopSave}
         onCancel={() => setStopModalOpen(false)}
       />

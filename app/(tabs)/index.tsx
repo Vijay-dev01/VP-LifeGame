@@ -7,22 +7,27 @@ import { HabitGrid } from '@/components/HabitGrid';
 import { XPBadge } from '@/components/XPBadge';
 import { GoalFocusWidget } from '@/components/goals/GoalFocusWidget';
 import { theme } from '@/constants/theme';
+import type { Habit } from '@/store';
 
 export default function DashboardScreen() {
-  const [addOpen, setAddOpen] = useState(false);
+  const [modalHabit, setModalHabit] = useState<Habit | null | undefined>(undefined);
 
   return (
     <TabScreen>
       <XPBadge />
       <GoalFocusWidget />
       <View style={styles.topRow}>
-        <Pressable style={styles.addBtn} onPress={() => setAddOpen(true)}>
+        <Pressable style={styles.addBtn} onPress={() => setModalHabit(null)}>
           <Text style={styles.addBtnText}>+ Add habit</Text>
         </Pressable>
       </View>
       <StatsCards />
-      <HabitGrid />
-      <AddHabitModal visible={addOpen} onClose={() => setAddOpen(false)} />
+      <HabitGrid onEditHabit={(habit) => setModalHabit(habit)} />
+      <AddHabitModal
+        visible={modalHabit !== undefined}
+        habit={modalHabit ?? undefined}
+        onClose={() => setModalHabit(undefined)}
+      />
     </TabScreen>
   );
 }

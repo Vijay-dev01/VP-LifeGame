@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { format } from 'date-fns';
-import { useStore, type Habit } from '@/store';
+import { useStore } from '@/store';
 import { PLAN_START_ACTION } from '@/hooks/useEngagementNotificationActions';
 import {
   getNotificationsModule,
   SMART_NOTIFICATION_SOURCE,
 } from '@/hooks/notifications/shared';
+import { isHabitScheduledOn } from '@/utils/habitSchedule';
+import {
+  nextHabitReminderDates,
+  upcomingPlanItemTriggers,
+} from '@/utils/notificationTriggers';
 
 const SMART_SOURCE = SMART_NOTIFICATION_SOURCE;
 const CHANNEL_ID = 'habit-reminders';
@@ -17,36 +22,8 @@ let handlerConfigured = false;
 
 type ExpoNotifications = typeof import('expo-notifications');
 
-type ReminderChoice = {
-  habitId: string;
-  habitName: string;
-  hour: number;
-  minute: number;
-};
-
-function parseTime(value?: string | null): { hour: number; minute: number } | null {
-  if (!value) return null;
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
-  if (!m) return null;
-  return { hour: Number(m[1]), minute: Number(m[2]) };
-}
-
-function pickEarliestCustomReminder(habits: Habit[]): ReminderChoice | null {
-  const withReminders = habits
-    .filter((h) => h.notificationsEnabled && h.reminderTime)
-    .map((h) => {
-      const parsed = parseTime(h.reminderTime);
-      if (!parsed) return null;
-      return {
-        habitId: h.id,
-        habitName: h.name,
-        hour: parsed.hour,
-        minute: parsed.minute,
-      };
-    })
-    .filter((item): item is ReminderChoice => item !== null)
-    .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-  return withReminders[0] ?? null;
+function androidChannel() {
+  return Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {};
 }
 
 async function ensureNotificationInfra(Notifications: ExpoNotifications) {
@@ -115,11 +92,49 @@ async function scheduleRecurringNotification(
       body,
       data: { source: SMART_SOURCE, type },
       sound: false,
+      ...androidChannel(),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
+    },
+  });
+}
+
+async function scheduleDateNotification(
+  Notifications: ExpoNotifications,
+  {
+    identifier,
+    date,
+    title,
+    body,
+    type,
+    extraData,
+    categoryIdentifier,
+  }: {
+    identifier: string;
+    date: Date;
+    title: string;
+    body: string;
+    type: string;
+    extraData?: Record<string, unknown>;
+    categoryIdentifier?: string;
+  }
+) {
+  await Notifications.scheduleNotificationAsync({
+    identifier,
+    content: {
+      title,
+      body,
+      data: { source: SMART_SOURCE, type, ...extraData },
+      sound: false,
+      ...(categoryIdentifier ? { categoryIdentifier } : {}),
+      ...androidChannel(),
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date,
     },
   });
 }
@@ -145,17 +160,12 @@ async function scheduleOneTimeTodayNotification(
   triggerDate.setHours(hour, minute, 0, 0);
   if (triggerDate <= now) return;
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data: { source: SMART_SOURCE, type },
-      sound: false,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: triggerDate,
-    },
+  await scheduleDateNotification(Notifications, {
+    identifier: `smart-${type}-${format(triggerDate, 'yyyy-MM-dd')}`,
+    date: triggerDate,
+    title,
+    body,
+    type,
   });
 }
 
@@ -166,6 +176,7 @@ async function scheduleWeeklySummary(Notifications: ExpoNotifications) {
       body: 'Review your week and set your next streak target.',
       data: { source: SMART_SOURCE, type: 'weekly-summary' },
       sound: false,
+      ...androidChannel(),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
@@ -196,9 +207,11 @@ async function runNotificationSchedule() {
   await cancelManagedNotifications(Notifications);
   if (!notificationSettings.enabled) return;
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const now = new Date();
+  const today = format(now, 'yyyy-MM-dd');
   const todayDone = (completions[today] ?? []).length;
-  const totalHabits = habits.length;
+  const scheduledToday = habits.filter((h) => isHabitScheduledOn(h.activeDays, today));
+  const totalHabits = scheduledToday.length || habits.length;
   const progress = totalHabits === 0 ? 0 : Math.round((todayDone / totalHabits) * 100);
   const activeGoalCount = lifeGoals.filter((g) => g.status === 'active').length;
   const limit = notificationSettings.dailyLimit;
@@ -221,51 +234,55 @@ async function runNotificationSchedule() {
     });
   }
 
-  if (limit >= 3) {
-    const custom = pickEarliestCustomReminder(habits);
-    if (custom) {
-      await scheduleRecurringNotification(Notifications, {
-        hour: custom.hour,
-        minute: custom.minute,
+  let scheduledHabitReminder = false;
+  for (const habit of habits) {
+    if (!habit.notificationsEnabled || !habit.reminderTime) continue;
+    const upcoming = nextHabitReminderDates(habit.activeDays, habit.reminderTime, now, 7);
+    for (const item of upcoming) {
+      scheduledHabitReminder = true;
+      await scheduleDateNotification(Notifications, {
+        identifier: `habit-${habit.id}-${item.date}`,
+        date: item.trigger,
         title: 'Habit Tracker',
-        body: `${custom.habitName}: time to take action.`,
-        type: `habit-${custom.habitId}`,
+        body: `${habit.name}: time to take action.`,
+        type: `habit-${habit.id}`,
       });
-    } else {
-      const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      let adaptive: { hour: number; minute: number; body: string; type: string } | null = null;
-      if (todayDone === 0 && nowMinutes < 10 * 60) {
-        adaptive = {
-          hour: 10,
-          minute: 0,
-          body: 'No wins yet. Start your first habit now.',
-          type: 'adaptive-10am',
-        };
-      } else if (progress < 50 && nowMinutes < 18 * 60) {
-        adaptive = {
-          hour: 18,
-          minute: 0,
-          body: 'You are under 50%. Push one more habit now.',
-          type: 'adaptive-6pm',
-        };
-      } else if (progress < 100 && nowMinutes < 21 * 60) {
-        adaptive = {
-          hour: 21,
-          minute: 0,
-          body: 'Your streak is at risk. Finish your habits tonight.',
-          type: 'adaptive-9pm',
-        };
-      }
-      if (adaptive) {
-        await scheduleOneTimeTodayNotification(Notifications, {
-          hour: adaptive.hour,
-          minute: adaptive.minute,
-          title: 'Habit Tracker',
-          body: adaptive.body,
-          type: adaptive.type,
-        });
-      }
+    }
+  }
+
+  if (limit >= 3 && !scheduledHabitReminder) {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    let adaptive: { hour: number; minute: number; body: string; type: string } | null = null;
+    if (todayDone === 0 && nowMinutes < 10 * 60) {
+      adaptive = {
+        hour: 10,
+        minute: 0,
+        body: 'No wins yet. Start your first habit now.',
+        type: 'adaptive-10am',
+      };
+    } else if (progress < 50 && nowMinutes < 18 * 60) {
+      adaptive = {
+        hour: 18,
+        minute: 0,
+        body: 'You are under 50%. Push one more habit now.',
+        type: 'adaptive-6pm',
+      };
+    } else if (progress < 100 && nowMinutes < 21 * 60) {
+      adaptive = {
+        hour: 21,
+        minute: 0,
+        body: 'Your streak is at risk. Finish your habits tonight.',
+        type: 'adaptive-9pm',
+      };
+    }
+    if (adaptive) {
+      await scheduleOneTimeTodayNotification(Notifications, {
+        hour: adaptive.hour,
+        minute: adaptive.minute,
+        title: 'Habit Tracker',
+        body: adaptive.body,
+        type: adaptive.type,
+      });
     }
   }
 
@@ -311,44 +328,45 @@ async function runNotificationSchedule() {
     type: 'reflection-evening',
   });
 
-  const todayPlans = dayPlans[today] ?? [];
-  const firstPlan = todayPlans.find((p) => !p.done) ?? todayPlans[0];
-  const morningParsed = firstPlan ? parseTime(firstPlan.time) : null;
-  const morningHour = morningParsed?.hour ?? 8;
-  const morningMinute = morningParsed?.minute ?? 0;
-  const morningBody = firstPlan
-    ? `Ready? First task: ${firstPlan.title}`
-    : 'No plan yet — tap to plan your day';
-
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Good morning',
-      body: morningBody,
-      data: {
-        source: SMART_SOURCE,
-        type: 'plan-morning',
-        planId: firstPlan?.id,
-        openPlan: !firstPlan,
-      },
-      sound: false,
+  const allPlanItems = Object.values(dayPlans).flat();
+  const upcomingPlans = upcomingPlanItemTriggers(allPlanItems, now);
+  for (const item of upcomingPlans) {
+    await scheduleDateNotification(Notifications, {
+      identifier: `plan-${item.id}`,
+      date: item.trigger,
+      title: 'Plan reminder',
+      body: item.title,
+      type: 'plan-item',
+      extraData: { planId: item.id },
       categoryIdentifier: PLAN_CATEGORY_ID,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: morningHour,
-      minute: morningMinute,
-    },
-  });
+    });
+  }
+
+  const todayPlans = dayPlans[today] ?? [];
+  const todayUpcoming = upcomingPlanItemTriggers(todayPlans, now);
+  if (todayUpcoming.length === 0) {
+    await scheduleRecurringNotification(Notifications, {
+      hour: 8,
+      minute: 0,
+      title: 'Good morning',
+      body: todayPlans.length ? 'Your planned tasks are ready' : 'No plan yet — tap to plan your day',
+      type: 'plan-morning',
+    });
+  }
 }
 
 async function maybeSendCompletionNotification(prevDone: number, todayDone: number) {
   const state = useStore.getState();
   const { notificationSettings, notificationState, habits, completions } = state;
   const today = format(new Date(), 'yyyy-MM-dd');
-  const totalHabits = habits.length;
+  const scheduledToday = habits.filter((h) => isHabitScheduledOn(h.activeDays, today));
+  const totalHabits = scheduledToday.length;
+  const doneScheduled = scheduledToday.filter((h) =>
+    (completions[today] ?? []).includes(h.id)
+  ).length;
 
   if (!notificationSettings.enabled) return;
-  if (totalHabits === 0 || todayDone !== totalHabits || prevDone === todayDone) return;
+  if (totalHabits === 0 || doneScheduled !== totalHabits || prevDone === todayDone) return;
   if (notificationState.date === today && notificationState.sentTypes.includes('completion')) return;
   if (notificationState.date === today && notificationState.sentCount >= notificationSettings.dailyLimit)
     return;
@@ -362,6 +380,7 @@ async function maybeSendCompletionNotification(prevDone: number, todayDone: numb
       body: '100% done. Great job 💯',
       data: { source: SMART_SOURCE, type: 'completion' },
       sound: false,
+      ...androidChannel(),
     },
     trigger: null,
   });

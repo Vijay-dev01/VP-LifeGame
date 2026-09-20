@@ -1,23 +1,29 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import type { LifeLogIntent, LifeLogMood } from '@/store';
+import { CategoryPicker } from '@/components/life-log/CategoryPicker';
 import { MOODS, MOOD_EMOJI } from '@/utils/lifeLog';
+import { runAfterKeyboardHidden } from '@/utils/keyboard';
 import { theme } from '@/constants/theme';
 
 interface StopTimerModalProps {
   visible: boolean;
   defaultTitle: string;
+  defaultCategory: string;
   onSave: (data: {
     title: string;
+    category?: string;
     notes?: string;
     mood?: LifeLogMood;
     energyLevel?: number;
@@ -26,91 +32,127 @@ interface StopTimerModalProps {
   onCancel: () => void;
 }
 
-export function StopTimerModal({ visible, defaultTitle, onSave, onCancel }: StopTimerModalProps) {
+export function StopTimerModal({
+  visible,
+  defaultTitle,
+  defaultCategory,
+  onSave,
+  onCancel,
+}: StopTimerModalProps) {
   const [title, setTitle] = useState(defaultTitle);
+  const [category, setCategory] = useState(defaultCategory);
   const [notes, setNotes] = useState('');
   const [mood, setMood] = useState<LifeLogMood | undefined>();
   const [energy, setEnergy] = useState<number | undefined>();
   const [intent, setIntent] = useState<LifeLogIntent>('unplanned');
+  const keyboardUp = useRef(false);
 
   React.useEffect(() => {
     if (visible) {
       setTitle(defaultTitle);
+      setCategory(defaultCategory);
       setNotes('');
       setMood(undefined);
       setEnergy(undefined);
       setIntent('unplanned');
     }
-  }, [visible, defaultTitle]);
+  }, [visible, defaultTitle, defaultCategory]);
+
+  React.useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardUp.current = true;
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardUp.current = false;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const handleBackdrop = () => {
+    if (keyboardUp.current) {
+      Keyboard.dismiss();
+      return;
+    }
+    runAfterKeyboardHidden(onCancel);
+  };
+
+  const handleSave = () => {
+    runAfterKeyboardHidden(() =>
+      onSave({
+        title: title.trim() || defaultTitle,
+        category,
+        notes: notes.trim() || undefined,
+        mood,
+        energyLevel: energy,
+        intentType: intent,
+      })
+    );
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.overlay} onPress={onCancel}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleBackdrop}>
+      <Pressable style={styles.overlay} onPress={handleBackdrop}>
+        <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.title}>Save activity</Text>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Activity name"
-              placeholderTextColor={theme.textMuted}
-            />
-            <TextInput
-              style={[styles.input, styles.notes]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Notes (optional)"
-              placeholderTextColor={theme.textMuted}
-              multiline
-            />
-            <View style={styles.moodRow}>
-              {MOODS.map((m) => (
-                <Pressable
-                  key={m}
-                  style={[styles.moodChip, mood === m && styles.moodOn]}
-                  onPress={() => setMood(mood === m ? undefined : m)}
-                >
-                  <Text>{MOOD_EMOJI[m]}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.energyRow}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Pressable
-                  key={n}
-                  style={[styles.energyBtn, energy === n && styles.energyOn]}
-                  onPress={() => setEnergy(energy === n ? undefined : n)}
-                >
-                  <Text style={styles.energyText}>{n}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.intentRow}>
-              {(['planned', 'unplanned'] as LifeLogIntent[]).map((i) => (
-                <Pressable
-                  key={i}
-                  style={[styles.intentBtn, intent === i && styles.intentOn]}
-                  onPress={() => setIntent(i)}
-                >
-                  <Text style={[styles.intentText, intent === i && styles.intentTextOn]}>{i}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              style={styles.saveBtn}
-              onPress={() =>
-                onSave({
-                  title: title.trim() || defaultTitle,
-                  notes: notes.trim() || undefined,
-                  mood,
-                  energyLevel: energy,
-                  intentType: intent,
-                })
-              }
-            >
-              <Text style={styles.saveText}>Save & stop</Text>
-            </Pressable>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.title}>Save activity</Text>
+              <TextInput
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Activity name"
+                placeholderTextColor={theme.textMuted}
+              />
+              <Text style={styles.label}>CATEGORY</Text>
+              <CategoryPicker value={category} onChange={setCategory} />
+              <TextInput
+                style={[styles.input, styles.notes]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Notes (optional)"
+                placeholderTextColor={theme.textMuted}
+                multiline
+              />
+              <View style={styles.moodRow}>
+                {MOODS.map((m) => (
+                  <Pressable
+                    key={m}
+                    style={[styles.moodChip, mood === m && styles.moodOn]}
+                    onPress={() => setMood(mood === m ? undefined : m)}
+                  >
+                    <Text>{MOOD_EMOJI[m]}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.energyRow}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Pressable
+                    key={n}
+                    style={[styles.energyBtn, energy === n && styles.energyOn]}
+                    onPress={() => setEnergy(energy === n ? undefined : n)}
+                  >
+                    <Text style={styles.energyText}>{n}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.intentRow}>
+                {(['planned', 'unplanned'] as LifeLogIntent[]).map((i) => (
+                  <Pressable
+                    key={i}
+                    style={[styles.intentBtn, intent === i && styles.intentOn]}
+                    onPress={() => setIntent(i)}
+                  >
+                    <Text style={[styles.intentText, intent === i && styles.intentTextOn]}>{i}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveText}>Save & stop</Text>
+              </Pressable>
+            </ScrollView>
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -132,12 +174,22 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     padding: 20,
     paddingBottom: 32,
+    maxHeight: '90%',
+    overflow: 'hidden',
   },
   title: {
     fontSize: 16,
     fontWeight: '800',
     color: theme.text,
     marginBottom: 12,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
   },
   input: {
     backgroundColor: theme.surfaceLight,
@@ -147,6 +199,7 @@ const styles = StyleSheet.create({
     padding: 12,
     color: theme.text,
     marginBottom: 10,
+    marginTop: 8,
   },
   notes: {
     minHeight: 60,
@@ -155,6 +208,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 10,
+    marginTop: 8,
   },
   moodChip: {
     padding: 8,

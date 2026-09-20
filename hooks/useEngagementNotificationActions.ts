@@ -30,6 +30,24 @@ export function useEngagementNotificationActions() {
           return;
         }
 
+        if (type === 'plan-item') {
+          const planId = typeof data?.planId === 'string' ? data.planId : null;
+          if (planId && (actionId === PLAN_START_ACTION || actionId === Notifications.DEFAULT_ACTION_IDENTIFIER)) {
+            const state = useStore.getState();
+            for (const [date, items] of Object.entries(state.dayPlans)) {
+              const item = items.find((p) => p.id === planId);
+              if (!item) continue;
+              if (!item.done && !state.activeTimer) {
+                state.startTimer(item.category, item.title);
+                state.markPlanItemDone(date, item.id);
+              }
+              break;
+            }
+          }
+          Linking.openURL('vprime://life-log').catch(() => {});
+          return;
+        }
+
         if (type === 'plan-morning' && actionId === PLAN_START_ACTION) {
           const today = format(new Date(), 'yyyy-MM-dd');
           const plans = useStore.getState().getPlanForDate(today);

@@ -1,6 +1,6 @@
 import { format, isThisMonth, isThisWeek, parseISO } from 'date-fns';
-import type { LifeLog, LifeLogMood } from '@/store';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import type { CustomLifeLogCategory, LifeLog, LifeLogMood } from '@/store';
+import { resolveCategory } from '@/constants/lifeLogCategories';
 export {
   formatTimerElapsed,
   getActiveDurationMinutes,
@@ -94,6 +94,9 @@ export function validateLifeLogTimes(startTime: string, endTime: string): string
   return null;
 }
 
-export function getCategoryLabel(categoryId: string): string {
-  return getCategoryById(categoryId)?.label ?? categoryId;
+export function getCategoryLabel(
+  categoryId: string,
+  customs: CustomLifeLogCategory[] = []
+): string {
+  return resolveCategory(categoryId, customs)?.label ?? categoryId;
 }

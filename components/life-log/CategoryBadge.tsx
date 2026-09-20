@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { useResolvedCategory } from '@/hooks/useResolvedCategories';
 
 interface CategoryBadgeProps {
   categoryId: string;
@@ -8,7 +8,7 @@ interface CategoryBadgeProps {
 }
 
 export function CategoryBadge({ categoryId, compact }: CategoryBadgeProps) {
-  const cat = getCategoryById(categoryId);
+  const cat = useResolvedCategory(categoryId);
   if (!cat) return null;
   const Icon = cat.icon;
 

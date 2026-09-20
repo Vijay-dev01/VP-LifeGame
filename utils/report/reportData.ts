@@ -14,7 +14,7 @@ import {
   computeMonthlyCompletionPercent,
   computeTotalDoneThisMonth,
 } from '@/store';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { resolveCategory } from '@/constants/lifeLogCategories';
 import { computeLifeAnalytics } from '@/utils/lifeLogAnalytics';
 import { generateLifeInsights } from '@/utils/lifeLogInsights';
 import {
@@ -25,6 +25,7 @@ import {
   sortLogsByStartDesc,
   sumDuration,
 } from '@/utils/lifeLog';
+import { isHabitScheduledOn } from '@/utils/habitSchedule';
 import { progressColor } from './reportTheme';
 
 export interface HabitRow {
@@ -123,7 +124,7 @@ function topCategoryForLogs(logs: LifeLog[]): string {
       best = cat;
     }
   }
-  return getCategoryById(best)?.label ?? best;
+  return resolveCategory(best, useStore.getState().customLifeLogCategories)?.label ?? best;
 }
 
 function buildWeeklyHours(logs: LifeLog[], monthStart: string): WeeklyHours[] {
@@ -156,11 +157,14 @@ export function buildReportData(monthStart: string): ReportData {
   const habitRows: HabitRow[] = s.habits
     .map((h) => {
       let done = 0;
+      let scheduled = 0;
       for (const d of dates) {
         const key = format(d, 'yyyy-MM-dd');
+        if (!isHabitScheduledOn(h.activeDays, key)) continue;
+        scheduled++;
         if ((s.completions[key] ?? []).includes(h.id)) done++;
       }
-      const pct = dates.length ? Math.round((done / dates.length) * 100) : 0;
+      const pct = scheduled ? Math.round((done / scheduled) * 100) : 0;
       return {
         name: `${h.emoji} ${h.name}`,
         done,

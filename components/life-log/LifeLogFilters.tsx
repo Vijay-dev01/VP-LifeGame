@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { LIFE_LOG_CATEGORIES } from '@/constants/lifeLogCategories';
+import { useResolvedCategories } from '@/hooks/useResolvedCategories';
 import type { LifeLogFilters } from '@/hooks/useLifeLog';
 import type { LifeLogIntent, LifeLogMood } from '@/store';
 import { MOODS } from '@/utils/lifeLog';
@@ -13,6 +13,7 @@ interface LifeLogFiltersBarProps {
 }
 
 export function LifeLogFiltersBar({ filters, onUpdate, onClear }: LifeLogFiltersBarProps) {
+  const categories = useResolvedCategories();
   const hasFilters =
     filters.category || filters.mood || filters.intentType || filters.searchQuery.trim();
 
@@ -27,7 +28,7 @@ export function LifeLogFiltersBar({ filters, onUpdate, onClear }: LifeLogFilters
       />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {LIFE_LOG_CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <Pressable
             key={cat.id}
             style={[

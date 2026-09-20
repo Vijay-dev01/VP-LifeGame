@@ -25,6 +25,7 @@ import { syncDailyActionsFromDayProgress } from '@/utils/goalDailyActionSync';
 import { toStoredGoalAmount } from '@/utils/goalUnits';
 import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatching';
 import { calcDurationMinutes, getActiveDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
+import { isHabitScheduledOn, normalizeActiveDays } from '@/utils/habitSchedule';
 import {
   addDays,
   format,
@@ -39,6 +40,20 @@ export interface Habit {
   order: number;
   notificationsEnabled?: boolean;
   reminderTime?: string | null;
+  /** JS getDay() values: 0=Sun … 6=Sat. Missing/empty = every day. */
+  activeDays?: number[];
+}
+
+export interface CustomLifeLogCategory {
+  id: string;
+  label: string;
+  color: string;
+}
+
+export interface CustomNextItem {
+  id: string;
+  category: string;
+  title: string;
 }
 
 export interface DayTask {
@@ -160,6 +175,8 @@ interface AppState {
   goalProgressRules: GoalProgressRule[];
   goalProgressEntries: GoalProgressEntry[];
   goalHealthSnapshots: GoalHealthSnapshot[];
+  customLifeLogCategories: CustomLifeLogCategory[];
+  customNextItems: CustomNextItem[];
   addLifeGoal: (input: CreateGoalInput) => string;
   updateLifeGoal: (id: string, patch: Partial<LifeGoal>) => void;
   updateLifeGoalDetails: (id: string, input: UpdateGoalInput) => void;
@@ -176,11 +193,14 @@ interface AppState {
   evaluateGoalProgressFromLifeLog: (log: LifeLog) => void;
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
+  updateHabit: (habitId: string, patch: Partial<Omit<Habit, 'id' | 'order'>>) => void;
   updateHabitNotification: (
     habitId: string,
     updates: { notificationsEnabled?: boolean; reminderTime?: string | null }
   ) => void;
   toggleHabitDay: (habitId: string, date: string) => void;
+  addCustomLifeLogCategory: (input: { label: string; color?: string }) => string;
+  addCustomNextItem: (item: { category: string; title: string }) => string;
   isHabitDone: (habitId: string, date: string) => boolean;
   addTask: (date: string, title: string) => void;
   deleteTask: (id: string) => void;
@@ -199,6 +219,7 @@ interface AppState {
   resumeTimer: () => void;
   stopTimer: (overrides?: {
     title?: string;
+    category?: string;
     notes?: string;
     mood?: LifeLogMood;
     energyLevel?: number;
@@ -208,6 +229,7 @@ interface AppState {
     endTimeIso: string,
     overrides?: {
       title?: string;
+      category?: string;
       notes?: string;
       mood?: LifeLogMood;
       energyLevel?: number;
@@ -322,6 +344,8 @@ export const useStore = create<AppState>()(
       goalProgressRules: [],
       goalProgressEntries: [],
       goalHealthSnapshots: [],
+      customLifeLogCategories: [],
+      customNextItems: [],
 
       addHabit: (habit) => {
         const order = get().habits.length;
@@ -332,6 +356,7 @@ export const useStore = create<AppState>()(
               ...habit,
               notificationsEnabled: habit.notificationsEnabled ?? false,
               reminderTime: habit.reminderTime ?? null,
+              activeDays: normalizeActiveDays(habit.activeDays),
               id: genId(),
               order,
             },
@@ -351,24 +376,31 @@ export const useStore = create<AppState>()(
         });
       },
 
-      updateHabitNotification: (habitId, updates) => {
+      updateHabit: (habitId, patch) => {
         set((s) => ({
           habits: s.habits.map((habit) =>
             habit.id === habitId
               ? {
                   ...habit,
-                  notificationsEnabled:
-                    updates.notificationsEnabled ?? habit.notificationsEnabled ?? false,
-                  reminderTime:
-                    updates.reminderTime === undefined ? habit.reminderTime ?? null : updates.reminderTime,
+                  ...patch,
+                  activeDays:
+                    patch.activeDays !== undefined
+                      ? normalizeActiveDays(patch.activeDays)
+                      : habit.activeDays,
                 }
               : habit
           ),
         }));
       },
 
+      updateHabitNotification: (habitId, updates) => {
+        get().updateHabit(habitId, updates);
+      },
+
       toggleHabitDay: (habitId, date) => {
         set((s) => {
+          const habit = s.habits.find((h) => h.id === habitId);
+          if (habit && !isHabitScheduledOn(habit.activeDays, date)) return s;
           const list = s.completions[date] ?? [];
           const has = list.includes(habitId);
           const next = has ? list.filter((id) => id !== habitId) : [...list, habitId];
@@ -376,7 +408,6 @@ export const useStore = create<AppState>()(
           if (next.length) completions[date] = next;
           else delete completions[date];
           if (!has) {
-            const habit = s.habits.find((h) => h.id === habitId);
             get().awardXp(HABIT_XP_BONUS, habit?.name ?? 'Habit');
           }
           return { completions };
@@ -385,6 +416,41 @@ export const useStore = create<AppState>()(
 
       isHabitDone: (habitId, date) =>
         (get().completions[date] ?? []).includes(habitId),
+
+      addCustomLifeLogCategory: (input) => {
+        const label = input.label.trim();
+        if (!label) return '';
+        const existing = get().customLifeLogCategories.find(
+          (c) => c.label.toLowerCase() === label.toLowerCase()
+        );
+        if (existing) return existing.id;
+        const id = `custom-${genId()}`;
+        const category: CustomLifeLogCategory = {
+          id,
+          label,
+          color: input.color || '#6366f1',
+        };
+        set((s) => ({
+          customLifeLogCategories: [...s.customLifeLogCategories, category],
+        }));
+        return id;
+      },
+
+      addCustomNextItem: (item) => {
+        const title = item.title.trim();
+        if (!title) return '';
+        const existing = get().customNextItems.find(
+          (c) => c.title.toLowerCase() === title.toLowerCase()
+        );
+        if (existing) return existing.id;
+        const next: CustomNextItem = {
+          id: genId(),
+          category: item.category || 'deep-work',
+          title,
+        };
+        set((s) => ({ customNextItems: [...s.customNextItems, next] }));
+        return next.id;
+      },
 
       addTask: (date, title) => {
         const tasks = get().dayTasks[date] ?? [];
@@ -552,7 +618,9 @@ export const useStore = create<AppState>()(
       },
 
       startTimer: (category, title) => {
-        const resolvedTitle = title?.trim() || getDefaultTitleForCategory(category);
+        const resolvedTitle =
+          title?.trim() ||
+          getDefaultTitleForCategory(category, get().customLifeLogCategories);
         const startTime = new Date().toISOString();
         set({
           activeTimer: {
@@ -610,9 +678,10 @@ export const useStore = create<AppState>()(
         if (!timer) return null;
         const endTime = new Date().toISOString();
         const title = overrides?.title?.trim() || timer.title;
+        const category = overrides?.category || timer.category;
         const id = get().addLifeLog({
           title,
-          category: timer.category,
+          category,
           startTime: timer.sessionStartTime ?? timer.startTime,
           endTime,
           duration: getActiveDurationMinutes(timer),
@@ -622,7 +691,7 @@ export const useStore = create<AppState>()(
           intentType: overrides?.intentType ?? 'unplanned',
         });
         if (id) {
-          get().awardXp(calcActivityXp(timer.category, title), title);
+          get().awardXp(calcActivityXp(category, title), title);
         }
         set({ activeTimer: null, pendingStopFromNotification: false });
         return id;
@@ -632,11 +701,12 @@ export const useStore = create<AppState>()(
         const timer = get().activeTimer;
         if (!timer) return null;
         const title = overrides?.title?.trim() || timer.title;
+        const category = overrides?.category || timer.category;
         const err = validateLifeLogTimes(timer.sessionStartTime ?? timer.startTime, endTimeIso);
         if (err) return null;
         const id = get().addLifeLog({
           title,
-          category: timer.category,
+          category,
           startTime: timer.sessionStartTime ?? timer.startTime,
           endTime: endTimeIso,
           duration: getActiveDurationMinutes(timer),
@@ -646,7 +716,7 @@ export const useStore = create<AppState>()(
           intentType: overrides?.intentType ?? 'unplanned',
         });
         if (id) {
-          get().awardXp(calcActivityXp(timer.category, title), title);
+          get().awardXp(calcActivityXp(category, title), title);
         }
         set({ activeTimer: null, pendingStopFromNotification: false });
         return id;
@@ -1332,18 +1402,35 @@ export const useStore = create<AppState>()(
           goalProgressRules: [],
           goalProgressEntries: [],
           goalHealthSnapshots: [],
+          customLifeLogCategories: [],
+          customNextItems: [],
         }),
     }),
     {
       name: 'lifegame-store',
-      version: 1,
+      version: 2,
       migrate: (persisted: unknown) => {
         const state = persisted as {
           aiSettings?: { enabled?: boolean; apiKey?: string };
+          habits?: Array<{ activeDays?: number[] } & Record<string, unknown>>;
+          customLifeLogCategories?: CustomLifeLogCategory[];
+          customNextItems?: CustomNextItem[];
         };
         if (state?.aiSettings?.apiKey) {
           stashLegacyApiKey(state.aiSettings.apiKey);
           state.aiSettings = { enabled: state.aiSettings.enabled ?? false };
+        }
+        if (Array.isArray(state.habits)) {
+          state.habits = state.habits.map((habit) => ({
+            ...habit,
+            activeDays: normalizeActiveDays(habit.activeDays),
+          }));
+        }
+        if (!Array.isArray(state.customLifeLogCategories)) {
+          state.customLifeLogCategories = [];
+        }
+        if (!Array.isArray(state.customNextItems)) {
+          state.customNextItems = [];
         }
         return persisted as AppState;
       },
@@ -1374,6 +1461,8 @@ export const useStore = create<AppState>()(
         goalProgressRules: s.goalProgressRules,
         goalProgressEntries: s.goalProgressEntries,
         goalHealthSnapshots: s.goalHealthSnapshots,
+        customLifeLogCategories: s.customLifeLogCategories,
+        customNextItems: s.customNextItems,
       }),
     }
   )

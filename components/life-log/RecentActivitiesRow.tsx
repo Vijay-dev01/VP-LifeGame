@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getCategoryById } from '@/constants/lifeLogCategories';
+import { useResolvedCategory } from '@/hooks/useResolvedCategories';
 import { theme } from '@/constants/theme';
 
 interface ActivityChip {
@@ -14,6 +14,32 @@ interface RecentActivitiesRowProps {
   disabled?: boolean;
 }
 
+function RecentChip({
+  category,
+  title,
+  disabled,
+  onResume,
+}: {
+  category: string;
+  title: string;
+  disabled?: boolean;
+  onResume: (category: string, title: string) => void;
+}) {
+  const cat = useResolvedCategory(category);
+  return (
+    <Pressable
+      style={[styles.chip, cat && { borderColor: `${cat.color}44` }]}
+      disabled={disabled}
+      onPress={() => onResume(category, title)}
+    >
+      <Text style={styles.chipTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {cat ? <Text style={[styles.chipCat, { color: cat.color }]}>{cat.label}</Text> : null}
+    </Pressable>
+  );
+}
+
 export function RecentActivitiesRow({ activities, onResume, disabled }: RecentActivitiesRowProps) {
   if (activities.length === 0) return null;
 
@@ -21,24 +47,15 @@ export function RecentActivitiesRow({ activities, onResume, disabled }: RecentAc
     <View style={styles.wrap}>
       <Text style={styles.title}>RECENT</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {activities.map((a) => {
-          const cat = getCategoryById(a.category);
-          return (
-            <Pressable
-              key={`${a.category}|${a.title}`}
-              style={[styles.chip, cat && { borderColor: `${cat.color}44` }]}
-              disabled={disabled}
-              onPress={() => onResume(a.category, a.title)}
-            >
-              <Text style={styles.chipTitle} numberOfLines={1}>
-                {a.title}
-              </Text>
-              {cat ? (
-                <Text style={[styles.chipCat, { color: cat.color }]}>{cat.label}</Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
+        {activities.map((a) => (
+          <RecentChip
+            key={`${a.category}|${a.title}`}
+            category={a.category}
+            title={a.title}
+            disabled={disabled}
+            onResume={onResume}
+          />
+        ))}
       </ScrollView>
     </View>
   );
