@@ -8,7 +8,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { Pencil, Trash2 } from 'lucide-react-native';
+import { EllipsisVertical } from 'lucide-react-native';
 import { addDays, startOfMonth, endOfMonth, getDate, format, isSameDay, subMonths } from 'date-fns';
 import { useStore, type Habit } from '@/store';
 import { theme } from '@/constants/theme';
@@ -16,7 +16,7 @@ import { isHabitScheduledOn } from '@/utils/habitSchedule';
 import { EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 const CELL = 38;
-const LABEL_W = 140;
+const LABEL_W = 176;
 const HEADER_MIN_H = 54;
 const ROW_MIN_H = 44;
 
@@ -82,6 +82,25 @@ export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => voi
   const rightScrollRef = React.useRef<ScrollView | null>(null);
   const lastMonthKeyRef = React.useRef<string | null>(null);
 
+  const confirmDelete = (habit: Habit) => {
+    Alert.alert('Delete habit', `Remove "${habit.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteHabit(habit.id),
+      },
+    ]);
+  };
+
+  const openHabitMenu = (habit: Habit) => {
+    Alert.alert(`${habit.emoji} ${habit.name}`, undefined, [
+      { text: '✏️ Edit habit', onPress: () => onEditHabit?.(habit) },
+      { text: '🗑 Delete habit', style: 'destructive', onPress: () => confirmDelete(habit) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const start = startOfMonth(new Date(currentMonth + 'T12:00:00'));
   const end = endOfMonth(start);
   const daysInMonth = getDate(end);
@@ -146,7 +165,6 @@ export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => voi
                     const { x, y } = e.nativeEvent.layout;
                     habitLabelLayouts.current[habit.id] = { x, y };
                   }}
-                  onPress={() => onEditHabit?.(habit)}
                   onLongPress={() => {
                     const layout = habitLabelLayouts.current[habit.id];
                     if (!layout) return;
@@ -174,41 +192,19 @@ export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => voi
                         onMouseLeave: () => setTooltip(null),
                       } as any)
                     : {})}
-                  style={{ flex: 1 }}
+                  style={styles.habitNameBtn}
                 >
-                  <Text
-                    style={styles.habitName}
-                    numberOfLines={1}
-                  >
+                  <Text style={styles.habitName} numberOfLines={1} ellipsizeMode="tail">
                     {habit.emoji} {habit.name}
                   </Text>
                 </Pressable>
                 <Pressable
                   hitSlop={8}
-                  onPress={() => onEditHabit?.(habit)}
-                  style={styles.deleteBtn}
+                  onPress={() => openHabitMenu(habit)}
+                  style={styles.menuBtn}
+                  accessibilityLabel={`Actions for ${habit.name}`}
                 >
-                  <Pencil size={16} color={theme.textMuted} />
-                </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() =>
-                    Alert.alert(
-                      'Delete habit',
-                      `Remove "${habit.name}"?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: () => deleteHabit(habit.id),
-                        },
-                      ]
-                    )
-                  }
-                  style={styles.deleteBtn}
-                >
-                  <Trash2 size={20} color={theme.accent} />
+                  <EllipsisVertical size={18} color={theme.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -326,24 +322,21 @@ const styles = StyleSheet.create({
     minWidth: LABEL_W,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 4,
+  },
+  habitNameBtn: {
+    flex: 1,
+    minWidth: 0,
   },
   habitName: {
-    flex: 1,
     fontSize: 14,
     color: theme.text,
   },
-  deleteBtn: {
-    // Keep left column row height aligned with right checkbox cells.
-    // Right cells end up at: 24px icon + 10px padding top/bottom = 44px.
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    marginLeft: 4,
-  },
-  deleteBtnText: {
-    fontSize: 12,
-    color: theme.accent,
-    fontWeight: '600',
+  menuBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayCell: {
     width: CELL,
