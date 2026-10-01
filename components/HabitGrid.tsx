@@ -16,9 +16,9 @@ import { isHabitScheduledOn } from '@/utils/habitSchedule';
 import { EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 const CELL = 38;
-const LABEL_W = 176;
-const HEADER_MIN_H = 54;
-const ROW_MIN_H = 44;
+const LABEL_W = 150;
+const HEADER_H = 54;
+const ROW_H = 44;
 
 // Subscribes only to this cell's checked state so only this cell re-renders on toggle
 const HabitCell = memo(function HabitCell({
@@ -299,19 +299,21 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
+    height: HEADER_H,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
     backgroundColor: theme.surfaceLight,
-    minHeight: HEADER_MIN_H,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
+    height: ROW_H,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
-    minHeight: ROW_MIN_H,
+    overflow: 'hidden',
   },
   cell: {
-    paddingVertical: 10,
+    paddingVertical: 0,
     paddingHorizontal: 8,
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -322,19 +324,20 @@ const styles = StyleSheet.create({
     minWidth: LABEL_W,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   habitNameBtn: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
   },
   habitName: {
     fontSize: 14,
     color: theme.text,
   },
   menuBtn: {
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -342,6 +345,7 @@ const styles = StyleSheet.create({
     width: CELL,
     minWidth: CELL,
     alignItems: 'center',
+    alignSelf: 'stretch',
   },
   todayCell: {
     backgroundColor: 'rgba(220, 38, 38, 0.15)',
