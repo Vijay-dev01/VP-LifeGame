@@ -7,7 +7,7 @@ import { emailMonthlyPdf } from '@/utils/monthlyReport';
 function hasAnyData() {
   const s = useStore.getState();
   return (
-    s.habits.length > 0 ||
+    Object.values(s.habitsByMonth).some((list) => list.length > 0) ||
     Object.keys(s.completions).length > 0 ||
     Object.keys(s.dayTasks).length > 0
   );

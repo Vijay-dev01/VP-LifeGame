@@ -18,18 +18,24 @@ interface Section {
 }
 
 export function LifeLogTimeline({ grouped, dayTotals }: LifeLogTimelineProps) {
-  const sections: Section[] = [
-    { key: 'today', title: 'TODAY', logs: grouped.today },
-    { key: 'yesterday', title: 'YESTERDAY', logs: grouped.yesterday },
-    { key: 'thisWeek', title: 'THIS WEEK', logs: grouped.thisWeek },
-    { key: 'older', title: 'OLDER', logs: grouped.older },
-  ].filter((s) => s.logs.length > 0);
+  const sections: Section[] = grouped.useCalendarDays
+    ? grouped.byDay.map((day) => ({
+        key: day.dateKey,
+        title: day.title,
+        logs: day.logs,
+      }))
+    : [
+        { key: 'today', title: 'TODAY', logs: grouped.today },
+        { key: 'yesterday', title: 'YESTERDAY', logs: grouped.yesterday },
+        { key: 'thisWeek', title: 'THIS WEEK', logs: grouped.thisWeek },
+        { key: 'older', title: 'OLDER', logs: grouped.older },
+      ].filter((s) => s.logs.length > 0);
 
   if (sections.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No activities logged yet</Text>
-        <Text style={styles.emptySub}>Tap a quick start button or + to log your first activity.</Text>
+        <Text style={styles.emptyTitle}>No activities logged for this month.</Text>
+        <Text style={styles.emptySub}>Tap a quick start button or + to log an activity.</Text>
       </View>
     );
   }

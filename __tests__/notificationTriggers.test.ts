@@ -55,4 +55,15 @@ assert.ok(items[0].trigger.getTime() < items[1].trigger.getTime());
 assert.ok(items[1].trigger.getTime() < items[2].trigger.getTime());
 assert.equal(items[0].trigger.getDate(), 19);
 
+const reminded = upcomingPlanItemTriggers(
+  [
+    { id: 'e', date: '2026-09-19', time: '18:00', reminderTime: '09:00', title: 'Call' },
+    { id: 'f', date: '2026-09-19', time: '18:00', title: 'No reminder' },
+  ],
+  evening
+);
+assert.equal(reminded.length, 2);
+assert.equal(reminded[0].trigger.getHours(), 9);
+assert.equal(reminded[1].trigger.getHours(), 18);
+
 console.log('notification trigger tests passed');

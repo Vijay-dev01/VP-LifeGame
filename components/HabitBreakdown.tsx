@@ -1,10 +1,11 @@
 import { theme } from "@/constants/theme";
 import { computeHabitCompletionPercent, useStore } from "@/store";
+import { EMPTY_HABITS } from "@/utils/habitsByMonth";
 import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export function HabitBreakdown() {
-  const habits = useStore((s) => s.habits);
+  const habits = useStore((s) => s.habitsByMonth[s.currentMonth] ?? EMPTY_HABITS);
   const completions = useStore((s) => s.completions);
   const currentMonth = useStore((s) => s.currentMonth);
   const sorted = useMemo(

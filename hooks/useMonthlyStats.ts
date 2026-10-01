@@ -6,16 +6,18 @@ import {
   computeMonthlyCompletionPercent,
   computeTotalDoneThisMonth,
 } from '@/store/selectors';
+import { EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 export function useMonthlyStats() {
-  const habits = useStore((s) => s.habits);
+  const habitsByMonth = useStore((s) => s.habitsByMonth);
   const completions = useStore((s) => s.completions);
   const currentMonth = useStore((s) => s.currentMonth);
+  const habits = habitsByMonth[currentMonth] ?? EMPTY_HABITS;
 
   return useMemo(
     () => ({
       totalDone: computeTotalDoneThisMonth(completions, currentMonth),
-      bestStreak: computeBestStreak(habits, completions),
+      bestStreak: computeBestStreak(habits, completions, currentMonth),
       monthlyPercent: computeMonthlyCompletionPercent(habits, completions, currentMonth),
       consistencyTrend: computeConsistencyTrend(completions, currentMonth),
     }),

@@ -13,7 +13,8 @@ import { useStore } from '@/store';
 import { theme } from '@/constants/theme';
 import type { DayPlanItem, DayTask } from '@/store';
 import { ProgressRing } from '@/components/ui/ProgressRing';
-import { formatPlanTime } from '@/utils/formatPlanTime';
+import { ScheduleTodoSheet } from '@/components/plan/ScheduleTodoSheet';
+import { formatPlanTimeRange } from '@/utils/formatPlanTime';
 
 const CARD_W = 280;
 const CARD_GAP = 12;
@@ -23,6 +24,7 @@ const RING_STROKE = 12;
 
 export function MissionBoard() {
   const today = format(new Date(), 'yyyy-MM-dd');
+  const currentMonth = useStore((s) => s.currentMonth);
   const dayTasks = useStore((s) => s.dayTasks);
   const dayPlans = useStore((s) => s.dayPlans);
   const lifeGoals = useStore((s) => s.lifeGoals);
@@ -32,39 +34,40 @@ export function MissionBoard() {
   const togglePlanItemDone = useStore((s) => s.togglePlanItemDone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [newTitle, setNewTitle] = useState('');
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const contentWidthRef = useRef(0);
 
-  // Current month only — same scope as the habit grid (chronological, scroll for past/future in-month).
   const missionDays = useMemo(() => {
-    const now = new Date();
-    return eachDayOfInterval({ start: startOfMonth(now), end: endOfMonth(now) });
-  }, [today]);
+    const start = startOfMonth(new Date(currentMonth + 'T12:00:00'));
+    return eachDayOfInterval({ start, end: endOfMonth(start) });
+  }, [currentMonth]);
 
-  const todayIndex = useMemo(() => {
-    const i = missionDays.findIndex((d) => format(d, 'yyyy-MM-dd') === today);
+  const selectedIndex = useMemo(() => {
+    const i = missionDays.findIndex((d) => format(d, 'yyyy-MM-dd') === selectedDate);
     return i >= 0 ? i : 0;
-  }, [missionDays, today]);
+  }, [missionDays, selectedDate]);
 
   useEffect(() => {
     const keys = missionDays.map((d) => format(d, 'yyyy-MM-dd'));
-    setSelectedDate((prev) => (keys.includes(prev) ? prev : today));
-  }, [today, missionDays]);
+    const fallback = keys.includes(today) ? today : keys[0];
+    setSelectedDate((prev) => (keys.includes(prev) ? prev : fallback));
+  }, [currentMonth, missionDays, today]);
 
-  const scrollToToday = useCallback(() => {
+  const scrollToSelected = useCallback(() => {
     scrollRef.current?.scrollTo({
-      x: todayIndex * CARD_STRIDE,
+      x: selectedIndex * CARD_STRIDE,
       y: 0,
       animated: false,
     });
-  }, [todayIndex]);
+  }, [selectedIndex]);
 
-  // Align today to the leading edge (same idea as HabitGrid scrolling to today).
   useEffect(() => {
+    contentWidthRef.current = 0;
     requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToToday);
+      requestAnimationFrame(scrollToSelected);
     });
-  }, [today, scrollToToday]);
+  }, [currentMonth, scrollToSelected]);
 
   const handleAdd = () => {
     const t = newTitle.trim();
@@ -101,12 +104,12 @@ export function MissionBoard() {
   return (
     <View>
       <Text style={styles.helperText}>
-        Scheduled items come from Plan Tomorrow. Add extra errands below.
+        Add a quick todo, or Schedule one with a time and reminder.
       </Text>
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="Add task to selected day..."
+          placeholder="Add todo to selected day..."
           placeholderTextColor={theme.textMuted}
           value={newTitle}
           onChangeText={setNewTitle}
@@ -117,6 +120,9 @@ export function MissionBoard() {
           <Text style={styles.addBtnText}>+ Add</Text>
         </Pressable>
       </View>
+      <Pressable style={styles.scheduleBtn} onPress={() => setScheduleOpen(true)}>
+        <Text style={styles.scheduleBtnText}>Schedule</Text>
+      </Pressable>
 
       <ScrollView
         ref={scrollRef}
@@ -126,7 +132,7 @@ export function MissionBoard() {
         onContentSizeChange={(w) => {
           if (w <= 0 || w === contentWidthRef.current) return;
           contentWidthRef.current = w;
-          scrollToToday();
+          scrollToSelected();
         }}
       >
         {cardData.map(({ dateObj, dateKey, scheduled, tasks, percent }) => {
@@ -155,7 +161,7 @@ export function MissionBoard() {
               <Text style={styles.tasksHeading}>Tasks</Text>
               <View style={styles.tasksList}>
                 {!hasItems ? (
-                  <Text style={styles.empty}>No tasks</Text>
+                  <Text style={styles.empty}>No tasks planned.</Text>
                 ) : (
                   <>
                     {scheduled.map((plan) => (
@@ -194,6 +200,11 @@ export function MissionBoard() {
           );
         })}
       </ScrollView>
+      <ScheduleTodoSheet
+        visible={scheduleOpen}
+        defaultDate={selectedDate}
+        onClose={() => setScheduleOpen(false)}
+      />
     </View>
   );
 }
@@ -206,7 +217,7 @@ function PlanRow({ plan, onToggle }: { plan: DayPlanItem; onToggle: () => void }
       </Pressable>
       <View style={styles.taskTitleWrap}>
         <Text style={[styles.taskTitle, plan.done && styles.taskDone]} numberOfLines={1}>
-          {formatPlanTime(plan.time)} · {plan.title}
+          {formatPlanTimeRange(plan.time, plan.endTime)} · {plan.title}
         </Text>
       </View>
     </View>
@@ -273,7 +284,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   input: {
     flex: 1,
@@ -302,6 +313,21 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontWeight: '600',
     fontSize: 15,
+  },
+  scheduleBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    backgroundColor: theme.surfaceLight,
+  },
+  scheduleBtnText: {
+    color: theme.text,
+    fontWeight: '700',
+    fontSize: 13,
   },
   cardsRow: {
     gap: 12,

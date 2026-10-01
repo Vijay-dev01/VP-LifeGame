@@ -63,13 +63,21 @@ export function planItemTriggerDate(date: string, time: string, now: Date): Date
 }
 
 export function upcomingPlanItemTriggers(
-  items: { id: string; date: string; time: string; title: string; done?: boolean }[],
+  items: {
+    id: string;
+    date: string;
+    time: string;
+    title: string;
+    done?: boolean;
+    reminderTime?: string | null;
+  }[],
   now: Date
 ): { id: string; title: string; trigger: Date }[] {
   const out: { id: string; title: string; trigger: Date }[] = [];
   for (const item of items) {
     if (item.done) continue;
-    const trigger = planItemTriggerDate(item.date, item.time, now);
+    const notifyAt = item.reminderTime || item.time;
+    const trigger = planItemTriggerDate(item.date, notifyAt, now);
     if (!trigger) continue;
     out.push({ id: item.id, title: item.title, trigger });
   }

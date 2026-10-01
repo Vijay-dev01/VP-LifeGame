@@ -8,6 +8,7 @@ import {
   SMART_NOTIFICATION_SOURCE,
 } from '@/hooks/notifications/shared';
 import { isHabitScheduledOn } from '@/utils/habitSchedule';
+import { habitsForMonth, monthKeyFromDate } from '@/utils/habitsByMonth';
 import {
   nextHabitReminderDates,
   upcomingPlanItemTriggers,
@@ -190,7 +191,7 @@ async function scheduleWeeklySummary(Notifications: ExpoNotifications) {
 async function runNotificationSchedule() {
   const state = useStore.getState();
   const {
-    habits,
+    habitsByMonth,
     completions,
     dayPlans,
     lifeGoals,
@@ -209,6 +210,7 @@ async function runNotificationSchedule() {
 
   const now = new Date();
   const today = format(now, 'yyyy-MM-dd');
+  const habits = habitsForMonth(habitsByMonth, monthKeyFromDate(today));
   const todayDone = (completions[today] ?? []).length;
   const scheduledToday = habits.filter((h) => isHabitScheduledOn(h.activeDays, today));
   const totalHabits = scheduledToday.length || habits.length;
@@ -357,8 +359,9 @@ async function runNotificationSchedule() {
 
 async function maybeSendCompletionNotification(prevDone: number, todayDone: number) {
   const state = useStore.getState();
-  const { notificationSettings, notificationState, habits, completions } = state;
+  const { notificationSettings, notificationState, habitsByMonth, completions } = state;
   const today = format(new Date(), 'yyyy-MM-dd');
+  const habits = habitsForMonth(habitsByMonth, monthKeyFromDate(today));
   const scheduledToday = habits.filter((h) => isHabitScheduledOn(h.activeDays, today));
   const totalHabits = scheduledToday.length;
   const doneScheduled = scheduledToday.filter((h) =>
@@ -424,7 +427,7 @@ export function useSmartNotificationsScheduler() {
       }
 
       if (
-        next.habits !== prev.habits ||
+        next.habitsByMonth !== prev.habitsByMonth ||
         next.completions !== prev.completions ||
         next.dayPlans !== prev.dayPlans ||
         next.notificationSettings !== prev.notificationSettings ||

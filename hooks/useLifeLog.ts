@@ -1,13 +1,21 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  endOfMonth,
   format,
   isThisWeek,
   isToday,
   isYesterday,
   parseISO,
+  startOfMonth,
 } from 'date-fns';
 import { useStore, type LifeLog, type LifeLogIntent, type LifeLogMood } from '@/store';
-import { parseActivityKey, sortLogsByStartDesc, sumDuration } from '@/utils/lifeLog';
+import {
+  filterLogsInRange,
+  getLogDateKey,
+  parseActivityKey,
+  sortLogsByStartDesc,
+  sumDuration,
+} from '@/utils/lifeLog';
 import { resolveCategory } from '@/constants/lifeLogCategories';
 
 export interface LifeLogFilters {
@@ -17,11 +25,19 @@ export interface LifeLogFilters {
   searchQuery: string;
 }
 
+export interface DayLogGroup {
+  dateKey: string;
+  title: string;
+  logs: LifeLog[];
+}
+
 export interface GroupedLifeLogs {
   today: LifeLog[];
   yesterday: LifeLog[];
   thisWeek: LifeLog[];
   older: LifeLog[];
+  byDay: DayLogGroup[];
+  useCalendarDays: boolean;
 }
 
 const SUGGESTION_RULES: Record<string, string[]> = {
@@ -58,6 +74,10 @@ function applyFilters(logs: LifeLog[], filters: LifeLogFilters): LifeLog[] {
   return result;
 }
 
+function emptyRelativeGroups(): Pick<GroupedLifeLogs, 'today' | 'yesterday' | 'thisWeek' | 'older'> {
+  return { today: [], yesterday: [], thisWeek: [], older: [] };
+}
+
 function groupLogs(logs: LifeLog[]): GroupedLifeLogs {
   const today: LifeLog[] = [];
   const yesterday: LifeLog[] = [];
@@ -77,11 +97,37 @@ function groupLogs(logs: LifeLog[]): GroupedLifeLogs {
     yesterday: sortLogsByStartDesc(yesterday),
     thisWeek: sortLogsByStartDesc(thisWeek),
     older: sortLogsByStartDesc(older),
+    byDay: [],
+    useCalendarDays: false,
+  };
+}
+
+function groupLogsByDay(logs: LifeLog[]): GroupedLifeLogs {
+  const map = new Map<string, LifeLog[]>();
+  for (const log of logs) {
+    const key = getLogDateKey(log);
+    const list = map.get(key) ?? [];
+    list.push(log);
+    map.set(key, list);
+  }
+  const byDay: DayLogGroup[] = [...map.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([dateKey, dayLogs]) => ({
+      dateKey,
+      title: format(parseISO(dateKey + 'T12:00:00'), 'EEEE, MMM d').toUpperCase(),
+      logs: sortLogsByStartDesc(dayLogs),
+    }));
+
+  return {
+    ...emptyRelativeGroups(),
+    byDay,
+    useCalendarDays: true,
   };
 }
 
 export function useLifeLog() {
   const logs = useStore((s) => s.lifeLogs);
+  const currentMonth = useStore((s) => s.currentMonth);
   const recentActivityKeys = useStore((s) => s.recentActivityKeys);
   const dayPlans = useStore((s) => s.dayPlans);
   const customNextItems = useStore((s) => s.customNextItems);
@@ -98,16 +144,25 @@ export function useLifeLog() {
   });
 
   const sortedLogs = useMemo(() => sortLogsByStartDesc(logs), [logs]);
+  const monthLogs = useMemo(() => {
+    const start = startOfMonth(new Date(currentMonth + 'T12:00:00'));
+    return filterLogsInRange(logs, start, endOfMonth(start));
+  }, [logs, currentMonth]);
+  const sortedMonthLogs = useMemo(() => sortLogsByStartDesc(monthLogs), [monthLogs]);
   const filteredLogs = useMemo(
-    () => applyFilters(sortedLogs, filters),
-    [sortedLogs, filters]
+    () => applyFilters(sortedMonthLogs, filters),
+    [sortedMonthLogs, filters]
   );
-  const groupedLogs = useMemo(() => groupLogs(filteredLogs), [filteredLogs]);
+  const viewingCurrentMonth = currentMonth === format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  const groupedLogs = useMemo(
+    () => (viewingCurrentMonth ? groupLogs(filteredLogs) : groupLogsByDay(filteredLogs)),
+    [filteredLogs, viewingCurrentMonth]
+  );
 
-  const todayTotalMinutes = useMemo(
-    () => sumDuration(groupedLogs.today),
-    [groupedLogs.today]
-  );
+  const todayTotalMinutes = useMemo(() => {
+    const todayLogs = logs.filter((l) => isToday(parseISO(l.startTime)));
+    return sumDuration(todayLogs);
+  }, [logs]);
 
   const dayTotals = useCallback(
     (dayLogs: LifeLog[]) => sumDuration(dayLogs),
@@ -192,7 +247,7 @@ export function useLifeLog() {
   const todayLabel = format(new Date(), 'EEEE, MMM d');
 
   return {
-    logs: sortedLogs,
+    logs: sortedMonthLogs,
     filteredLogs,
     groupedLogs,
     todayTotalMinutes,

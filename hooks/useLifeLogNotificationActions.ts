@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { useStore } from '@/store';
-import { shouldSkipNotificationHandlers } from '@/hooks/notifications/shared';
+import { getNotificationsModule, shouldSkipNotificationHandlers } from '@/hooks/notifications/shared';
 import {
   updateLifeLogTimerNotification,
   TIMER_ACTION_PAUSE,
@@ -10,8 +10,6 @@ import {
   TIMER_SOURCE,
 } from './useLifeLogTimerNotification';
 import { updateLifeLogTimerForegroundNotification } from './useLifeLogTimerForegroundService';
-
-type ExpoNotifications = typeof import('expo-notifications');
 
 async function refreshTimerNotification(): Promise<void> {
   const timer = useStore.getState().activeTimer;
@@ -30,7 +28,8 @@ export function useLifeLogNotificationActions() {
     let sub: { remove: () => void } | null = null;
 
     (async () => {
-      const Notifications: ExpoNotifications = await import('expo-notifications');
+      const Notifications = await getNotificationsModule();
+      if (!Notifications) return;
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
         if (data?.source !== TIMER_SOURCE) return;

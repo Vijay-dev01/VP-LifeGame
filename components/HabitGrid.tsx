@@ -9,10 +9,11 @@ import {
   Platform,
 } from 'react-native';
 import { Pencil, Trash2 } from 'lucide-react-native';
-import { addDays, startOfMonth, endOfMonth, getDate, format, isSameDay } from 'date-fns';
+import { addDays, startOfMonth, endOfMonth, getDate, format, isSameDay, subMonths } from 'date-fns';
 import { useStore, type Habit } from '@/store';
 import { theme } from '@/constants/theme';
 import { isHabitScheduledOn } from '@/utils/habitSchedule';
+import { EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 const CELL = 38;
 const LABEL_W = 140;
@@ -65,8 +66,11 @@ const HabitCell = memo(function HabitCell({
 
 export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => void }) {
   const currentMonth = useStore((s) => s.currentMonth);
-  const habits = useStore((s) => s.habits);
+  const habits = useStore((s) => s.habitsByMonth[s.currentMonth] ?? EMPTY_HABITS);
+  const prevMonth = format(subMonths(new Date(currentMonth + 'T12:00:00'), 1), 'yyyy-MM-dd');
+  const prevHabits = useStore((s) => s.habitsByMonth[prevMonth] ?? EMPTY_HABITS);
   const deleteHabit = useStore((s) => s.deleteHabit);
+  const copyHabitsFromMonth = useStore((s) => s.copyHabitsFromMonth);
   const today = useMemo(() => new Date(), []);
   const [tooltip, setTooltip] = React.useState<{
     habitId: string;
@@ -113,7 +117,12 @@ export function HabitGrid({ onEditHabit }: { onEditHabit?: (habit: Habit) => voi
   if (habits.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>No habits yet. Add one to start.</Text>
+        <Text style={styles.emptyText}>No habits configured for this month.</Text>
+        {prevHabits.length > 0 ? (
+          <Pressable style={styles.copyBtn} onPress={() => copyHabitsFromMonth(prevMonth)}>
+            <Text style={styles.copyBtnText}>Copy previous month</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -388,6 +397,20 @@ const styles = StyleSheet.create({
   emptyText: {
     color: theme.textMuted,
     fontSize: 14,
+  },
+  copyBtn: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surfaceLight,
+  },
+  copyBtnText: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: '700',
   },
   tooltip: {
     position: 'absolute',

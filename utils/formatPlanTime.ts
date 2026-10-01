@@ -8,3 +8,9 @@ export function formatPlanTime(time: string): string {
     return time;
   }
 }
+
+export function formatPlanTimeRange(start: string, endTime?: string): string {
+  const startLabel = formatPlanTime(start);
+  if (!endTime) return startLabel;
+  return `${startLabel}–${formatPlanTime(endTime)}`;
+}

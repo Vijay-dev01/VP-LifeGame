@@ -26,6 +26,7 @@ import {
   sumDuration,
 } from '@/utils/lifeLog';
 import { isHabitScheduledOn } from '@/utils/habitSchedule';
+import { habitsForMonth } from '@/utils/habitsByMonth';
 import { progressColor } from './reportTheme';
 
 export interface HabitRow {
@@ -153,8 +154,9 @@ export function buildReportData(monthStart: string): ReportData {
   const monthEnd = endOfMonth(new Date(monthStart + 'T12:00:00'));
   const monthLabel = format(new Date(monthStart + 'T12:00:00'), 'MMMM yyyy');
   const generatedAt = format(new Date(), "MMM d, yyyy 'at' h:mm a");
+  const monthHabits = habitsForMonth(s.habitsByMonth, monthStart);
 
-  const habitRows: HabitRow[] = s.habits
+  const habitRows: HabitRow[] = monthHabits
     .map((h) => {
       let done = 0;
       let scheduled = 0;
@@ -249,9 +251,9 @@ export function buildReportData(monthStart: string): ReportData {
     generatedAt,
     daysInMonth: getDate(monthEnd),
     dates,
-    totalHabits: s.habits.length,
+    totalHabits: monthHabits.length,
     totalHabitCompletions: computeTotalDoneThisMonth(s.completions, monthStart),
-    monthlyHabitPct: computeMonthlyCompletionPercent(s.habits, s.completions, monthStart),
+    monthlyHabitPct: computeMonthlyCompletionPercent(monthHabits, s.completions, monthStart),
     habitRows,
     consistencyTrend: computeConsistencyTrend(s.completions, monthStart),
     missionDaily,

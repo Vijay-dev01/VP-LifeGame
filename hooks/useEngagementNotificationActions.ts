@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 import { format } from 'date-fns';
 import { useStore } from '@/store';
 import {
+  getNotificationsModule,
   shouldSkipNotificationHandlers,
   SMART_NOTIFICATION_SOURCE,
 } from '@/hooks/notifications/shared';
@@ -17,7 +18,8 @@ export function useEngagementNotificationActions() {
     let sub: { remove: () => void } | null = null;
 
     (async () => {
-      const Notifications = await import('expo-notifications');
+      const Notifications = await getNotificationsModule();
+      if (!Notifications) return;
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
         if (data?.source !== SMART_SOURCE) return;

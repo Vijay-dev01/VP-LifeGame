@@ -5,6 +5,7 @@ import {
   normalizeActiveDays,
   weekdayFromDateStr,
 } from '@/utils/habitSchedule';
+import { monthKeyFromDate } from '@/utils/habitsByMonth';
 
 type HabitLike = { id: string; name: string; activeDays?: number[] };
 
@@ -31,16 +32,18 @@ export function computeTotalDoneThisMonth(
 
 export function computeBestStreak(
   habits: HabitLike[],
-  completions: Record<string, string[]>
+  completions: Record<string, string[]>,
+  currentMonth?: string
 ): { days: number; habitName: string } {
   let bestDays = 0;
   let bestName = '';
   for (const habit of habits) {
     const activeDays = normalizeActiveDays(habit.activeDays);
     const dates = Object.entries(completions)
-      .filter(
-        ([d, ids]) => ids.includes(habit.id) && activeDays.includes(weekdayFromDateStr(d))
-      )
+      .filter(([d, ids]) => {
+        if (currentMonth && monthKeyFromDate(d) !== currentMonth) return false;
+        return ids.includes(habit.id) && activeDays.includes(weekdayFromDateStr(d));
+      })
       .map(([d]) => d)
       .sort();
     let streak = 0;

@@ -16,6 +16,7 @@ import {
   updateLifeLogTimerForegroundNotification,
 } from './useLifeLogTimerForegroundService';
 import { getTimerElapsedSeconds } from '@/utils/lifeLog';
+import { getNotificationsModule } from '@/hooks/notifications/shared';
 
 const TICK_MS = 1_000;
 const IOS_BACKGROUND_REFRESH_MS = 60_000;
@@ -121,7 +122,8 @@ export function useLifeLogTimerSync() {
       forgotNudgeSentRef.current = today;
       void (async () => {
         try {
-          const Notifications = await import('expo-notifications');
+          const Notifications = await getNotificationsModule();
+          if (!Notifications) return;
           await Notifications.scheduleNotificationAsync({
             content: {
               title: `Still ${activeTimer.title}?`,

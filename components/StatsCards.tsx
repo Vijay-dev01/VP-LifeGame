@@ -3,9 +3,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useStore } from '@/store';
 import { useMonthlyStats } from '@/hooks/useMonthlyStats';
 import { theme } from '@/constants/theme';
+import { EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 export function StatsCards() {
-  const habits = useStore((s) => s.habits);
+  const habits = useStore((s) => s.habitsByMonth[s.currentMonth] ?? EMPTY_HABITS);
   const { totalDone, bestStreak, monthlyPercent: completionPercent } = useMonthlyStats();
 
   const cards = useMemo(

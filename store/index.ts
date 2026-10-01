@@ -27,6 +27,15 @@ import { matchesProgressRule, suggestKeywordsFromTitle } from '@/utils/goalMatch
 import { calcDurationMinutes, getActiveDurationMinutes, getTimerElapsedSeconds, pushRecentKey, validateLifeLogTimes } from '@/utils/lifeLog';
 import { isHabitScheduledOn, normalizeActiveDays } from '@/utils/habitSchedule';
 import {
+  addHabitToMonth,
+  copyHabitsToMonth,
+  deleteHabitInMonth,
+  habitsForMonth,
+  monthKeyFromDate,
+  seedHabitsByMonth,
+  updateHabitInMonth,
+} from '@/utils/habitsByMonth';
+import {
   addDays,
   format,
   parseISO,
@@ -118,6 +127,8 @@ export interface DayPlanItem {
   title: string;
   category: string;
   done?: boolean;
+  endTime?: string;
+  reminderTime?: string | null;
 }
 
 export type DistractionType = 'meeting' | 'phone' | 'youtube' | 'nothing' | 'other';
@@ -148,7 +159,7 @@ export type LifeLogInput = Omit<LifeLog, 'id' | 'duration' | 'createdAt'> & {
 };
 
 interface AppState {
-  habits: Habit[];
+  habitsByMonth: Record<string, Habit[]>;
   completions: Record<string, string[]>;
   dayTasks: Record<string, DayTask[]>;
   notificationSettings: NotificationSettings;
@@ -194,6 +205,8 @@ interface AppState {
   addHabit: (habit: Omit<Habit, 'id' | 'order'>) => void;
   deleteHabit: (id: string) => void;
   updateHabit: (habitId: string, patch: Partial<Omit<Habit, 'id' | 'order'>>) => void;
+  copyHabitsFromMonth: (fromMonth: string) => void;
+  getHabitsForMonth: (month?: string) => Habit[];
   updateHabitNotification: (
     habitId: string,
     updates: { notificationsEnabled?: boolean; reminderTime?: string | null }
@@ -270,6 +283,7 @@ export {
   computeMonthlyCompletionPercent,
   computeTotalDoneThisMonth,
 } from './selectors';
+export { habitsForMonth, monthKeyFromDate, EMPTY_HABITS } from '@/utils/habitsByMonth';
 
 function recomputeGoalCurrentValue(
   goalId: string,
@@ -309,7 +323,7 @@ function checkAndAwardGoalMilestones(
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
-      habits: [],
+      habitsByMonth: {},
       completions: {},
       dayTasks: {},
       notificationSettings: {
@@ -348,50 +362,45 @@ export const useStore = create<AppState>()(
       customNextItems: [],
 
       addHabit: (habit) => {
-        const order = get().habits.length;
-        set((s) => ({
-          habits: [
-            ...s.habits,
-            {
-              ...habit,
-              notificationsEnabled: habit.notificationsEnabled ?? false,
-              reminderTime: habit.reminderTime ?? null,
-              activeDays: normalizeActiveDays(habit.activeDays),
-              id: genId(),
-              order,
-            },
-          ],
-        }));
+        set((s) => {
+          const month = s.currentMonth;
+          const list = habitsForMonth(s.habitsByMonth, month);
+          const next: Habit = {
+            ...habit,
+            notificationsEnabled: habit.notificationsEnabled ?? false,
+            reminderTime: habit.reminderTime ?? null,
+            activeDays: normalizeActiveDays(habit.activeDays),
+            id: genId(),
+            order: list.length,
+          };
+          return { habitsByMonth: addHabitToMonth(s.habitsByMonth, month, next) };
+        });
       },
 
       deleteHabit: (id) => {
-        set((s) => {
-          const next = s.habits.filter((h) => h.id !== id);
-          const completions = { ...s.completions };
-          for (const date of Object.keys(completions)) {
-            completions[date] = completions[date].filter((hid) => hid !== id);
-            if (completions[date].length === 0) delete completions[date];
-          }
-          return { habits: next, completions };
-        });
+        set((s) => deleteHabitInMonth(s.habitsByMonth, s.completions, s.currentMonth, id));
       },
 
       updateHabit: (habitId, patch) => {
         set((s) => ({
-          habits: s.habits.map((habit) =>
-            habit.id === habitId
-              ? {
-                  ...habit,
-                  ...patch,
-                  activeDays:
-                    patch.activeDays !== undefined
-                      ? normalizeActiveDays(patch.activeDays)
-                      : habit.activeDays,
-                }
-              : habit
-          ),
+          habitsByMonth: updateHabitInMonth(s.habitsByMonth, s.currentMonth, habitId, {
+            ...patch,
+            activeDays:
+              patch.activeDays !== undefined
+                ? normalizeActiveDays(patch.activeDays)
+                : undefined,
+          }),
         }));
       },
+
+      copyHabitsFromMonth: (fromMonth) => {
+        set((s) => ({
+          habitsByMonth: copyHabitsToMonth(s.habitsByMonth, fromMonth, s.currentMonth),
+        }));
+      },
+
+      getHabitsForMonth: (month) =>
+        habitsForMonth(get().habitsByMonth, month ?? get().currentMonth),
 
       updateHabitNotification: (habitId, updates) => {
         get().updateHabit(habitId, updates);
@@ -399,7 +408,8 @@ export const useStore = create<AppState>()(
 
       toggleHabitDay: (habitId, date) => {
         set((s) => {
-          const habit = s.habits.find((h) => h.id === habitId);
+          const month = monthKeyFromDate(date);
+          const habit = habitsForMonth(s.habitsByMonth, month).find((h) => h.id === habitId);
           if (habit && !isHabitScheduledOn(habit.activeDays, date)) return s;
           const list = s.completions[date] ?? [];
           const has = list.includes(habitId);
@@ -1376,7 +1386,7 @@ export const useStore = create<AppState>()(
 
       resetAllData: () =>
         set({
-          habits: [],
+          habitsByMonth: {},
           completions: {},
           dayTasks: {},
           lifeLogs: [],
@@ -1408,11 +1418,13 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'lifegame-store',
-      version: 2,
-      migrate: (persisted: unknown) => {
+      version: 3,
+      migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as {
           aiSettings?: { enabled?: boolean; apiKey?: string };
           habits?: Array<{ activeDays?: number[] } & Record<string, unknown>>;
+          habitsByMonth?: Record<string, Habit[]>;
+          completions?: Record<string, string[]>;
           customLifeLogCategories?: CustomLifeLogCategory[];
           customNextItems?: CustomNextItem[];
         };
@@ -1426,6 +1438,12 @@ export const useStore = create<AppState>()(
             activeDays: normalizeActiveDays(habit.activeDays),
           }));
         }
+        if (fromVersion < 3 || !state.habitsByMonth) {
+          const legacy = (Array.isArray(state.habits) ? state.habits : []) as unknown as Habit[];
+          const nowMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+          state.habitsByMonth = seedHabitsByMonth(legacy, state.completions ?? {}, nowMonth);
+          delete state.habits;
+        }
         if (!Array.isArray(state.customLifeLogCategories)) {
           state.customLifeLogCategories = [];
         }
@@ -1436,7 +1454,7 @@ export const useStore = create<AppState>()(
       },
       storage: createJSONStorage(() => createSafeStorage()),
       partialize: (s) => ({
-        habits: s.habits,
+        habitsByMonth: s.habitsByMonth,
         completions: s.completions,
         dayTasks: s.dayTasks,
         lifeLogs: s.lifeLogs,
