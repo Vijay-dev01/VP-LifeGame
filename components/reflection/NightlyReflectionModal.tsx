@@ -36,6 +36,14 @@ export function NightlyReflectionModal({ visible, onSave, onSkip }: NightlyRefle
     }
   }, [visible]);
 
+  const trimmedNote = note.trim();
+  const canSave = selected !== null || trimmedNote.length > 0;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave(selected ?? 'other', trimmedNote || undefined);
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       <Pressable style={styles.overlay} onPress={onSkip}>
@@ -63,9 +71,9 @@ export function NightlyReflectionModal({ visible, onSave, onSkip }: NightlyRefle
               placeholderTextColor={theme.textMuted}
             />
             <Pressable
-              style={[styles.saveBtn, !selected && styles.saveBtnDisabled]}
-              disabled={!selected}
-              onPress={() => selected && onSave(selected, note.trim() || undefined)}
+              style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+              disabled={!canSave}
+              onPress={handleSave}
             >
               <Text style={styles.saveText}>Save</Text>
             </Pressable>
