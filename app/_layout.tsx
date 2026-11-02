@@ -8,7 +8,6 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { NotificationScheduler } from '@/components/NotificationScheduler';
-import { useMonthlyLifecycle } from '@/hooks/useMonthlyLifecycle';
 import { useLifeLogTimerSync } from '@/hooks/useLifeLogTimerSync';
 import { useLifeLogNotificationActions } from '@/hooks/useLifeLogNotificationActions';
 import { useEngagementNotificationActions } from '@/hooks/useEngagementNotificationActions';
@@ -54,7 +53,6 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  useMonthlyLifecycle();
   useLifeLogTimerSync();
   useLifeLogNotificationActions();
   useEngagementNotificationActions();

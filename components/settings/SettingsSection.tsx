@@ -42,8 +42,6 @@ export function SettingsSection({
   const setDailyNotificationLimit = useStore((s) => s.setDailyNotificationLimit);
   const reportRecipient = useStore((s) => s.reportRecipient);
   const setReportRecipient = useStore((s) => s.setReportRecipient);
-  const autoEmailMonthlyReport = useStore((s) => s.autoEmailMonthlyReport);
-  const setAutoEmailMonthlyReport = useStore((s) => s.setAutoEmailMonthlyReport);
   const forgotToStopState = useStore((s) => s.forgotToStopState);
   const setForgotToStopThreshold = useStore((s) => s.setForgotToStopThreshold);
 
@@ -104,15 +102,6 @@ export function SettingsSection({
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <View style={styles.row}>
-          <Text style={styles.label}>Auto-email monthly report</Text>
-          <TogglePill
-            compact
-            on={autoEmailMonthlyReport}
-            onPress={() => setAutoEmailMonthlyReport(!autoEmailMonthlyReport)}
-            label={autoEmailMonthlyReport ? 'ON' : 'OFF'}
-          />
-        </View>
       </View>
 
       <View style={styles.card}>
